@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, initial-scale=1.0" />
+<title>주식 모닝콜 LIVE — 실시간 증시 대시보드</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+@font-face{
+  font-family:'Pretendard';
+  src:url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/woff2/PretendardVariable.woff2') format('woff2-variations');
+  font-weight:45 920;
+}
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@500;700&display=swap');
+
+:root{
+  --bg:#0B0E14;
+  --panel:#12161F;
+  --panel-2:#171C27;
+  --line:#242B38;
+  --text:#E8ECF3;
+  --muted:#7C8699;
+  --muted-2:#4E5666;
+  --up:#FF4757;      /* 국내 관례: 상승 = 빨강 */
+  --down:#4C8DFF;    /* 국내 관례: 하락 = 파랑 */
+  --flat:#9BA3B4;
+  --accent:#FFB020;   /* 방송/온에어 아이덴티티 컬러 */
+  --accent-dim:#7A5A1E;
+  --live-red:#FF3B4E;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{background:var(--bg); color:var(--text); font-family:'Pretendard',sans-serif;}
+body{
+  min-height:100vh;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(255,176,32,0.05), transparent 40%),
+    radial-gradient(circle at 85% 100%, rgba(76,141,255,0.05), transparent 40%);
+}
+.mono{font-family:'Roboto Mono', monospace; font-variant-numeric: tabular-nums;}
+
+/* ================= HEADER ================= */
+.header{
+  display:flex; align-items:center; gap:20px;
+  padding:14px 24px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, #0E1219, #0B0E14);
+  position:sticky; top:0; z-index:50;
+}
+.live-badge{
+  display:flex; align-items:center; gap:8px;
+  background:var(--live-red); color:#fff;
+  font-weight:800; font-size:13px; letter-spacing:1px;
+  padding:6px 12px; border-radius:4px;
+}
+.live-dot{width:8px; height:8px; border-radius:50%; background:#fff; animation:pulse 1.4s infinite;}
+@keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.25;}}
+
+.brand{font-weight:900; font-size:20px; letter-spacing:.5px;}
+.brand span{color:var(--accent);}
+
+.header .clock{
+  font-size:15px; color:var(--muted); margin-left:auto;
+  display:flex; gap:14px; align-items:center;
+}
+.clock .time{color:var(--text); font-size:17px; font-weight:700;}
+
+.mode-toggle{display:flex; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px;}
+.mode-toggle button{
+  background:transparent; border:none; color:var(--muted);
+  font-family:inherit; font-weight:700; font-size:12px;
+  padding:7px 12px; border-radius:6px; cursor:pointer; letter-spacing:.5px;
+}
+.mode-toggle button.active{background:var(--accent); color:#1b1300;}
+
+.phase-badge{
+  font-size:12px; font-weight:800; letter-spacing:1px;
+  padding:6px 10px; border-radius:6px; border:1px solid var(--line);
+  color:var(--muted);
+}
+.phase-badge.kr{color:var(--up); border-color:#5c2028;}
+.phase-badge.us{color:var(--down); border-color:#1f3a63;}
+.phase-badge.off{color:var(--muted);}
+
+/* ================= LAYOUT ================= */
+.wrap{padding:20px 24px 0; max-width:1920px; margin:0 auto;}
+.dashboard-grid{display:grid; grid-template-columns:1fr 360px; gap:20px; align-items:start;}
+.main-col{min-width:0;}
+
+/* ================= 실시간 이슈 사이드바 ================= */
+.side-col{
+  position:sticky; top:76px;
+  background:linear-gradient(180deg, var(--panel-2), var(--panel));
+  border:1px solid var(--line); border-radius:14px;
+  padding:18px 16px; max-height:calc(100vh - 96px); overflow-y:auto;
+}
+.side-col::-webkit-scrollbar{width:5px;}
+.side-col::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+.side-title{display:flex; align-items:center; gap:8px; font-weight:900; font-size:15.5px;}
+.side-title .dot{width:7px; height:7px; border-radius:50%; background:var(--live-red); flex-shrink:0; animation:pulse 1.4s infinite;}
+.side-sub{font-size:11.5px; color:var(--muted-2); margin:4px 0 12px;}
+.issue-item{display:flex; gap:10px; padding:12px 2px; border-bottom:1px solid var(--line); cursor:default;}
+.issue-item:last-child{border-bottom:none;}
+.issue-rank{flex-shrink:0; width:20px; font-size:16px; font-weight:900; color:var(--muted-2); font-family:'Roboto Mono',monospace;}
+.issue-body{min-width:0; flex:1;}
+.issue-title{font-size:13.5px; font-weight:700; line-height:1.4; color:var(--text);}
+.issue-meta{display:flex; align-items:center; gap:6px; margin-top:7px; font-size:11px; color:var(--muted);}
+.issue-badge{
+  width:17px; height:17px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; font-weight:800; color:#fff;
+}
+.issue-new{
+  background:var(--accent); color:#1b1300; font-size:9px; font-weight:900;
+  padding:2px 6px; border-radius:4px; letter-spacing:.3px; flex-shrink:0;
+}
+
+@media (max-width:1400px){
+  .dashboard-grid{grid-template-columns:1fr;}
+  .side-col{position:static; max-height:none;}
+}
+
+.hero-row{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;}
+.hero-row.hero-row-3col{grid-template-columns: 1.15fr 1.15fr 0.8fr;}
+
+.popular-card{
+  background:linear-gradient(180deg, var(--panel-2), var(--panel));
+  border:1px solid var(--line); border-radius:14px; padding:18px 18px 10px;
+  display:flex; flex-direction:column;
+}
+.popular-title{font-weight:800; font-size:14px; margin-bottom:8px; display:flex; align-items:center; gap:6px;}
+.popular-list{flex:1;}
+.popular-item{display:flex; align-items:center; gap:6px; padding:6.5px 0; border-bottom:1px solid var(--line); font-size:13px;}
+.popular-item:last-child{border-bottom:none;}
+.popular-rank{width:16px; flex-shrink:0; font-weight:800; color:var(--muted-2); font-size:12px;}
+.popular-name{flex:1; min-width:0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.popular-vals{flex-shrink:0; display:flex; align-items:baseline; gap:10px; white-space:nowrap;}
+.popular-price{font-weight:700; font-size:12.5px; white-space:nowrap;}
+.popular-chg{font-size:11.5px; font-weight:700; width:58px; text-align:right; white-space:nowrap;}
+.popular-arrow{margin-right:1px;}
+.popular-chg.up{color:var(--up);} .popular-chg.down{color:var(--down);} .popular-chg.flat{color:var(--flat);}
+.hero-card{
+  background:linear-gradient(180deg, var(--panel-2), var(--panel));
+  border:1px solid var(--line); border-radius:14px; padding:22px 26px;
+  position:relative; overflow:hidden;
+}
+.hero-card::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, var(--accent), transparent);
+}
+.hero-top{display:flex; justify-content:space-between; align-items:flex-start;}
+.hero-label{font-size:14px; color:var(--muted); font-weight:700; letter-spacing:.5px;}
+.hero-sub{font-size:12px; color:var(--muted-2); margin-top:2px;}
+.status-dot{width:7px; height:7px; border-radius:50%; background:var(--muted-2); display:inline-block; margin-right:5px;}
+.status-dot.live{background:var(--up); box-shadow:0 0 6px var(--up);}
+.hero-main{display:flex; justify-content:flex-start; align-items:stretch; gap:16px; margin-top:8px;}
+.hero-price{font-size:56px; font-weight:700; line-height:1.1;}
+.hero-price .tight-punct{margin:0 -3px;}
+.hero-change{font-size:20px; font-weight:700; margin-top:6px; display:flex; gap:10px; align-items:center;}
+.hero-breadth{font-size:12.5px; color:var(--muted); margin-top:6px; display:flex; gap:8px;}
+.hero-breadth b.up{color:var(--up); font-weight:700;}
+.hero-breadth b.down{color:var(--down); font-weight:700;}
+.hero-spark{flex-shrink:0; width:190px; min-height:64px;}
+.hero-spark svg{display:block; width:100%; height:100%;}
+.up{color:var(--up);} .down{color:var(--down);} .flat{color:var(--flat);}
+
+/* ================= GRID CARDS ================= */
+.section-title{
+  font-size:13px; color:var(--muted); font-weight:800; letter-spacing:1.5px;
+  text-transform:uppercase; margin:22px 0 10px; display:flex; align-items:center; gap:8px;
+}
+.section-title::after{content:''; flex:1; height:1px; background:var(--line);}
+
+.grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:14px;}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+.card{
+  background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  padding:16px 18px; display:flex; align-items:stretch; justify-content:flex-start; gap:12px;
+}
+.card .card-main{min-width:0;}
+.card .label{font-size:12.5px; color:var(--muted); font-weight:700; display:flex; align-items:center;}
+.card .price{font-size:27px; font-weight:700; margin-top:8px;}
+.card .change{font-size:13.5px; font-weight:700; margin-top:4px;}
+.card .updated{font-size:10.5px; color:var(--muted-2); margin-top:8px;}
+.card .card-spark{flex-shrink:0; width:110px;}
+.card .card-spark svg{display:block; width:100%; height:100%;}
+
+/* 수급 현황 / 상승·하락 확률 / 공포·탐욕 지수 */
+.stat-row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+.stat-row.stat-row-4col{grid-template-columns:1fr 1fr 1fr 1fr;}
+
+.sector-list{margin-top:2px;}
+.sector-item{display:flex; align-items:center; gap:8px; padding:6.5px 0; border-bottom:1px solid var(--line); font-size:12px;}
+.sector-item:last-child{border-bottom:none;}
+.sector-name{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600;}
+.sector-chg{flex-shrink:0; font-weight:700; width:52px; text-align:right;}
+.sector-chg.up{color:var(--up);} .sector-chg.down{color:var(--down);} .sector-chg.flat{color:var(--flat);}
+.sector-bar-wrap{flex-shrink:0; width:44px; height:7px; background:var(--panel-2); border-radius:4px; overflow:hidden;}
+.sector-bar{display:block; height:100%; border-radius:4px;}
+
+.econ-list{margin-top:2px;}
+.econ-item{padding:7px 0; border-bottom:1px solid var(--line); font-size:12px;}
+.econ-item:last-child{border-bottom:none;}
+.econ-title{font-weight:600; margin-bottom:3px; display:flex; align-items:center; gap:5px;}
+.econ-vals{color:var(--muted); font-size:11.5px;}
+.econ-vals b{color:var(--text); font-weight:700;}
+.econ-vals b.up{color:var(--up);} .econ-vals b.down{color:var(--down);}
+.econ-empty{color:var(--muted-2); font-size:12.5px; text-align:center; padding:24px 0;}
+.econ-group-title{font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:.3px; margin:10px 0 2px;}
+.econ-group-title:first-child{margin-top:0;}
+.stat-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;}
+.stat-card .stat-title{font-size:12.5px; color:var(--muted); font-weight:700; margin-bottom:6px;}
+
+.flow-chart-wrap{display:flex; justify-content:center;}
+.flow-chart-wrap svg{max-width:100%; height:auto;}
+
+.ud-bar{position:relative; height:14px; border-radius:7px; overflow:hidden; display:flex; margin-top:36px;}
+.ud-bar .ud-up{background:var(--up);}
+.ud-bar .ud-down{background:var(--down);}
+.ud-labels{display:flex; justify-content:space-between; margin-top:8px; font-size:13px; font-weight:700;}
+.ud-labels .up{color:var(--up);} .ud-labels .down{color:var(--down);}
+.ud-caption{font-size:10.5px; color:var(--muted-2); margin-top:12px;}
+
+.fg-gauge-wrap{display:flex; flex-direction:column; align-items:center;}
+.fg-value{font-size:26px; font-weight:800; margin-top:-8px;}
+.fg-rating{font-size:12.5px; font-weight:700; margin-top:2px;}
+.fg-legend{display:flex; gap:6px; justify-content:center; margin-top:8px; flex-wrap:wrap;}
+.fg-legend span{font-size:9.5px; color:var(--muted); display:flex; align-items:center; gap:3px;}
+.fg-legend i{width:7px; height:7px; border-radius:50%; display:inline-block;}
+.fg-caption{font-size:10.5px; color:var(--muted-2); margin-top:6px; text-align:center;}
+
+@media (max-width:1400px){
+  .stat-row, .stat-row.stat-row-4col{grid-template-columns:1fr;}
+}
+
+/* ================= 주요 종목 스트립 ================= */
+.stocks-strip{
+  display:flex; gap:12px; overflow-x:auto; padding-bottom:4px;
+  scrollbar-width:thin;
+}
+.stock-chip{
+  flex:0 0 auto; min-width:190px;
+  background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding:10px 14px;
+}
+.stock-chip .s-name{font-size:12.5px; color:var(--muted); font-weight:700; white-space:nowrap;}
+.stock-chip .s-body{display:flex; align-items:stretch; justify-content:flex-start; gap:10px; margin-top:4px;}
+.stock-chip .s-price{font-size:17px; font-weight:700;}
+.stock-chip .s-chg{font-size:12px; font-weight:700; margin-top:2px;}
+.stock-chip .s-spark{flex-shrink:0; width:88px; align-self:stretch;}
+.stock-chip .s-spark svg{display:block; width:100%; height:100%;}
+
+/* ================= NEWS TICKER ================= */
+.ticker-wrap{
+  margin-top:22px; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  background:var(--panel); display:flex; align-items:center; height:44px; overflow:hidden;
+}
+.ticker-tag{
+  flex-shrink:0; background:var(--accent); color:#1b1300; font-weight:900;
+  font-size:12px; letter-spacing:1px; height:100%; display:flex; align-items:center; padding:0 16px;
+  position:relative; z-index:2;
+}
+.ticker-viewport{
+  flex:1; height:100%; overflow:hidden; position:relative;
+  display:flex; align-items:center;
+}
+.ticker-track{display:flex; white-space:nowrap; animation:scroll-left 55s linear infinite; will-change:transform;}
+.ticker-track span{padding:0 40px; font-size:14px; color:var(--text);}
+.ticker-track span b{color:var(--accent); margin-right:8px;}
+@keyframes scroll-left{from{transform:translateX(0);} to{transform:translateX(-50%);}}
+
+/* ================= INDICATOR STRIP ================= */
+.indicator-strip{
+  display:grid; grid-template-columns:repeat(6,1fr); gap:14px;
+  margin:16px 0 26px;
+}
+.indicator{
+  background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+  text-align:left; display:flex; align-items:stretch; justify-content:flex-start; gap:8px;
+}
+.indicator .ind-main{min-width:0;}
+.indicator .name{font-size:11.5px; color:var(--muted); font-weight:700;}
+.indicator .val{font-size:19px; font-weight:700; margin-top:5px;}
+.indicator .chg{font-size:12px; font-weight:700; margin-top:2px;}
+.indicator .ind-spark{flex-shrink:0; width:64px;}
+.indicator .ind-spark svg{display:block; width:100%; height:100%;}
+
+.kr-only, .us-only{display:none;}
+body.mode-kr .kr-only{display:block;}
+body.mode-kr .grid.kr-only, body.mode-kr .hero-row.kr-only{display:grid;}
+body.mode-us .us-only{display:block;}
+body.mode-us .grid.us-only, body.mode-us .hero-row.us-only{display:grid;}
+
+@media (max-width:1400px){
+  .grid{grid-template-columns:repeat(2,1fr);}
+  .indicator-strip{grid-template-columns:repeat(3,1fr);}
+}
+</style>
+</head>
+<body class="mode-kr">
+
+<div class="header">
+  <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+  <div class="brand">주식 모닝콜 <span>LIVE</span></div>
+  <div class="header clock" style="padding:0; border:none; margin-left:auto; display:flex; gap:14px; align-items:center;">
+    <span class="phase-badge off" id="phaseBadge">장 확인 중</span>
+    <div class="mode-toggle">
+      <button data-mode="auto" class="active">자동</button>
+      <button data-mode="kr">국장</button>
+      <button data-mode="us">미장</button>
+    </div>
+    <span class="time mono" id="clockKST">--:--:--</span>
+  </div>
+</div>
+
+<div class="wrap">
+<div class="dashboard-grid">
+<div class="main-col">
+
+  <!-- HERO: 국장 -->
+  <div class="hero-row kr-only hero-row-3col">
+    <div class="hero-card">
+      <div class="hero-top">
+        <div>
+          <div class="hero-label"><span class="status-dot" id="dot-kospi"></span>KOSPI 코스피</div>
+          <div class="hero-sub">유가증권시장</div>
+        </div>
+      </div>
+      <div class="hero-main">
+        <div>
+          <div class="hero-price mono" id="kospi-price">-</div>
+          <div class="hero-change mono" id="kospi-change">-</div>
+          <div class="hero-breadth" id="kospi-breadth">-</div>
+        </div>
+        <div class="hero-spark" id="spark-kospi"></div>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-top">
+        <div>
+          <div class="hero-label"><span class="status-dot" id="dot-kosdaq"></span>KOSDAQ 코스닥</div>
+          <div class="hero-sub">코스닥시장</div>
+        </div>
+      </div>
+      <div class="hero-main">
+        <div>
+          <div class="hero-price mono" id="kosdaq-price">-</div>
+          <div class="hero-change mono" id="kosdaq-change">-</div>
+          <div class="hero-breadth" id="kosdaq-breadth">-</div>
+        </div>
+        <div class="hero-spark" id="spark-kosdaq"></div>
+      </div>
+    </div>
+    <div class="popular-card">
+      <div class="popular-title" id="popularTitle">🔥 인기 검색 종목</div>
+      <div class="popular-list" id="popularList">
+        <div class="popular-item">불러오는 중...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HERO: 미장 -->
+  <div class="hero-row us-only hero-row-3col">
+    <div class="hero-card">
+      <div class="hero-top">
+        <div>
+          <div class="hero-label"><span class="status-dot" id="dot-dji"></span>DOW JONES 다우존스</div>
+          <div class="hero-sub">DJIA</div>
+        </div>
+      </div>
+      <div class="hero-main">
+        <div>
+          <div class="hero-price mono" id="dji-price">-</div>
+          <div class="hero-change mono" id="dji-change">-</div>
+          <div class="hero-breadth" id="dji-breadth">-</div>
+        </div>
+        <div class="hero-spark" id="spark-dji"></div>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-top">
+        <div>
+          <div class="hero-label"><span class="status-dot" id="dot-ixic"></span>NASDAQ 나스닥</div>
+          <div class="hero-sub">Composite</div>
+        </div>
+      </div>
+      <div class="hero-main">
+        <div>
+          <div class="hero-price mono" id="ixic-price">-</div>
+          <div class="hero-change mono" id="ixic-change">-</div>
+          <div class="hero-breadth" id="ixic-breadth">-</div>
+        </div>
+        <div class="hero-spark" id="spark-ixic"></div>
+      </div>
+    </div>
+    <div class="popular-card">
+      <div class="popular-title">📅 오늘의 경제지표</div>
+      <div class="econ-list" id="econList">
+        <div class="econ-empty">불러오는 중...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 국장 섹션 -->
+  <div class="kr-only">
+    <div class="section-title">미국장전 선물 &nbsp;/&nbsp; 아시아 증시</div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-ym"></span>다우선물</div>
+          <div class="price mono" id="ym-price">-</div>
+          <div class="change mono" id="ym-change">-</div>
+          <div class="updated" id="ym-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-ym"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-nq"></span>나스닥선물</div>
+          <div class="price mono" id="nq-price">-</div>
+          <div class="change mono" id="nq-change">-</div>
+          <div class="updated" id="nq-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-nq"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-china"></span>🇨🇳 상하이종합지수</div>
+          <div class="price mono" id="china-price">-</div>
+          <div class="change mono" id="china-change">-</div>
+          <div class="updated" id="china-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-china"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-nikkei"></span>🇯🇵 닛케이225</div>
+          <div class="price mono" id="nikkei-price">-</div>
+          <div class="change mono" id="nikkei-change">-</div>
+          <div class="updated" id="nikkei-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-nikkei"></div>
+      </div>
+    </div>
+
+    <div class="section-title">수급 현황 · 상승·하락 확률 · 공포·탐욕 지수 · 업종별 시세</div>
+    <div class="stat-row stat-row-4col">
+      <div class="stat-card">
+        <div class="stat-title">수급 현황 (코스피, 억원)</div>
+        <div class="flow-chart-wrap" id="flowChart"></div>
+        <div class="updated" id="flow-updated" style="display:none;">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">상승·하락 확률</div>
+        <div class="ud-bar" id="udBar"></div>
+        <div class="ud-labels">
+          <span class="up" id="udUpLabel">상승 -%</span>
+          <span class="down" id="udDownLabel">하락 -%</span>
+        </div>
+        <div class="ud-caption" id="udCaption" style="display:none;">관심종목 집계 중...</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">공포·탐욕 지수</div>
+        <div class="fg-gauge-wrap">
+          <div id="fgGauge"></div>
+          <div class="fg-value mono" id="fgValue">-</div>
+          <div class="fg-rating" id="fgRating">-</div>
+        </div>
+        <div class="fg-legend">
+          <span><i style="background:#E5484D"></i>극도공포</span>
+          <span><i style="background:#F5A623"></i>공포</span>
+          <span><i style="background:#9BA3B4"></i>중립</span>
+          <span><i style="background:#7ED957"></i>탐욕</span>
+          <span><i style="background:#2ECC71"></i>극도탐욕</span>
+        </div>
+        <div class="fg-caption" id="fgCaption" style="display:none;">국내증시 심리 지수 (자체 산출)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title" id="sectorTitle">업종별 시세</div>
+        <div class="sector-list" id="sectorList">
+          <div class="sector-item">불러오는 중...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 미장 섹션 -->
+  <div class="us-only">
+    <div class="section-title">미국 주요 지수</div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-sox"></span>필라델피아 반도체 (SOX)</div>
+          <div class="price mono" id="sox-price">-</div>
+          <div class="change mono" id="sox-change">-</div>
+          <div class="updated" id="sox-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-sox"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-vix"></span>VIX 공포지수</div>
+          <div class="price mono" id="vix-price">-</div>
+          <div class="change mono" id="vix-change">-</div>
+          <div class="updated" id="vix-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-vix"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-fx2"></span>원/달러 환율</div>
+          <div class="price mono" id="fx2-price">-</div>
+          <div class="change mono" id="fx2-change">-</div>
+          <div class="updated" id="fx2-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-fx2"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-r2k"></span>러셀 2000</div>
+          <div class="price mono" id="r2k-price">-</div>
+          <div class="change mono" id="r2k-change">-</div>
+          <div class="updated" id="r2k-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-r2k"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-ftse"></span>🇬🇧 영국 FTSE100</div>
+          <div class="price mono" id="ftse-price">-</div>
+          <div class="change mono" id="ftse-change">-</div>
+          <div class="updated" id="ftse-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-ftse"></div>
+      </div>
+      <div class="card">
+        <div class="card-main">
+          <div class="label"><span class="status-dot" id="dot-dax"></span>🇩🇪 독일 DAX</div>
+          <div class="price mono" id="dax-price">-</div>
+          <div class="change mono" id="dax-change">-</div>
+          <div class="updated" id="dax-updated">-</div>
+        </div>
+        <div class="card-spark" id="spark-dax"></div>
+      </div>
+    </div>
+
+    <div class="section-title">미국 3대 지수 등락률 · 상승·하락 확률 · 공포·탐욕 지수</div>
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-title">미국 3대 지수 등락률 (%)</div>
+        <div class="flow-chart-wrap" id="flowChartUS"></div>
+        <div class="updated" id="flowUS-updated">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">상승·하락 확률 (美 대표종목)</div>
+        <div class="ud-bar" id="udBarUS"></div>
+        <div class="ud-labels">
+          <span class="up" id="udUpLabelUS">상승 -%</span>
+          <span class="down" id="udDownLabelUS">하락 -%</span>
+        </div>
+        <div class="ud-caption" id="udCaptionUS">관심종목 집계 중...</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">공포·탐욕 지수</div>
+        <div class="fg-gauge-wrap">
+          <div id="fgGaugeUS"></div>
+          <div class="fg-value mono" id="fgValueUS">-</div>
+          <div class="fg-rating" id="fgRatingUS">-</div>
+        </div>
+        <div class="fg-legend">
+          <span><i style="background:#E5484D"></i>극도공포</span>
+          <span><i style="background:#F5A623"></i>공포</span>
+          <span><i style="background:#9BA3B4"></i>중립</span>
+          <span><i style="background:#7ED957"></i>탐욕</span>
+          <span><i style="background:#2ECC71"></i>극도탐욕</span>
+        </div>
+        <div class="fg-caption">CNN Fear &amp; Greed · 미국증시 기준</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 공통: 주요 경제지표 -->
+  <div class="section-title">주요 경제지표 (공통)</div>
+  <div class="indicator-strip">
+    <div class="indicator">
+      <div class="ind-main">
+        <div class="name">美 10년물 국채금리</div>
+        <div class="val mono" id="ind-tnx">-</div>
+        <div class="chg mono" id="ind-tnx-chg">-</div>
+      </div>
+      <div class="ind-spark" id="spark-tnx"></div>
+    </div>
+    <div class="indicator">
+      <div class="ind-main">
+        <div class="name">🛢️ WTI 원유</div>
+        <div class="val mono" id="ind-wti">-</div>
+        <div class="chg mono" id="ind-wti-chg">-</div>
+      </div>
+      <div class="ind-spark" id="spark-wti"></div>
+    </div>
+    <div class="indicator">
+      <div class="ind-main">
+        <div class="name">🥇 국제 금</div>
+        <div class="val mono" id="ind-gold">-</div>
+        <div class="chg mono" id="ind-gold-chg">-</div>
+      </div>
+      <div class="ind-spark" id="spark-gold"></div>
+    </div>
+    <div class="indicator">
+      <div class="ind-main">
+        <div class="name">달러인덱스(DXY)</div>
+        <div class="val mono" id="ind-dxy">-</div>
+        <div class="chg mono" id="ind-dxy-chg">-</div>
+      </div>
+      <div class="ind-spark" id="spark-dxy"></div>
+    </div>
+    <div class="indicator">
+      <div class="ind-main">
+        <div class="name">🪙 비트코인</div>
+        <div class="val mono" id="ind-btc">-</div>
+        <div class="chg mono" id="ind-btc-chg">-</div>
+      </div>
+      <div class="ind-spark" id="spark-btc"></div>
+    </div>
+    <div class="indicator">
+      <div class="ind-main">
+        <div class="name">USD/JPY</div>
+        <div class="val mono" id="ind-jpy">-</div>
+        <div class="chg mono" id="ind-jpy-chg">-</div>
+      </div>
+      <div class="ind-spark" id="spark-jpy"></div>
+    </div>
+  </div>
+
+  <!-- 주요 종목 (국장) -->
+  <div class="kr-only">
+    <div class="section-title">주요 종목</div>
+    <div class="stocks-strip" id="stocksStrip">
+      <div class="stock-chip"><div class="s-name">불러오는 중...</div></div>
+    </div>
+  </div>
+
+  <!-- 주요 종목 (미장) -->
+  <div class="us-only">
+    <div class="section-title">주요 종목</div>
+    <div class="stocks-strip" id="stocksStripUS">
+      <div class="stock-chip"><div class="s-name">불러오는 중...</div></div>
+    </div>
+  </div>
+
+  <!-- 뉴스 속보 -->
+  <div class="ticker-wrap">
+    <div class="ticker-tag">속보</div>
+    <div class="ticker-viewport">
+      <div class="ticker-track" id="newsTicker">
+        <span>뉴스를 불러오는 중입니다...</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+  <aside class="side-col">
+    <div class="side-title"><span class="dot"></span>실시간 이슈</div>
+    <div class="side-sub">언급이 많은 증시 관련 뉴스를 모았어요</div>
+    <div id="issueList">
+      <div class="issue-item"><div class="issue-body"><div class="issue-title">불러오는 중...</div></div></div>
+    </div>
+  </aside>
+
+</div>
+</div>
+
+<script>
+/* =========================================================
+   설정
+========================================================= */
+const CONFIG = {
+  // 전용 Cloudflare Worker 프록시로 교체 완료 (kor.jh2soft.workers.dev)
+  CORS_PROXY: 'https://kor.jh2soft.workers.dev/?url=',
+  // 데이터 성격별로 갱신 주기를 분리했습니다.
+  // 핵심 국내 시세(코스피/코스닥/환율/주요종목 가격)는 빠르게,
+  // 프록시 부하가 큰 야후 데이터·차트·스크레이핑은 느리게 돌려서 프록시 병목을 줄입니다.
+  REFRESH_CORE_MS: 8000,     // 코스피/코스닥/환율/주요종목 가격 (Naver)
+  REFRESH_YAHOO_MS: 25000,   // 미국지수/선물/원자재/지표 + 스파크라인 (Yahoo)
+  REFRESH_FLOW_MS: 30000,    // 수급현황 (HTML 스크레이핑, 가장 무거움)
+  REFRESH_NEWS_MS: 60000,    // 뉴스, 공포·탐욕 지수
+  // 세이브티커(SAVE, saveticker.com) API에서 뉴스를 가져옵니다.
+  // topStoriesUrl: 우측 "실시간 이슈" 패널용 주요뉴스
+  // listUrl(n): 하단 속보 티커용 최신순 전체 목록 (요청 개수의 4배, 최소 40)
+  SAVETICKER: {
+    topStoriesUrl: 'https://www.saveticker.com/api/news/top-stories',
+    listUrl: (n) => `https://www.saveticker.com/api/news/list?page=1&page_size=${Math.max(n*4, 40)}&sort=created_at_desc`,
+  },
+  // 오늘의 경제지표(미국): ForexFactory 무료 주간 캘린더 JSON 미러. API 키 불필요.
+  FF_CALENDAR: {
+    primary: 'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
+    backup: 'https://cdn-nfs.faireconomy.media/ff_calendar_thisweek.json',
+  },
+};
+
+let manualMode = 'auto'; // 'auto' | 'kr' | 'us'
+
+/* =========================================================
+   시간 / 모드 판별
+========================================================= */
+function getKST(){
+  return new Date(new Date().toLocaleString('en-US', {timeZone:'Asia/Seoul'}));
+}
+
+function getPhase(){
+  const now = getKST();
+  const day = now.getDay(); // 0 일 ~ 6 토
+  const h = now.getHours(), m = now.getMinutes();
+  const mins = h*60+m;
+  const isWeekday = day>=1 && day<=5;
+
+  const krOpen = 8*60, krClose = 16*60; // 국장 표시 시간: 08:00 ~ 16:00 (평일)
+
+  if(isWeekday && mins>=krOpen && mins<krClose) return 'kr';
+  return 'us'; // 그 외 시간(주말 포함)은 전부 미장을 기본으로 보여줍니다.
+}
+
+function applyMode(){
+  const phase = getPhase();
+  const effective = manualMode==='auto' ? phase : manualMode;
+  document.body.classList.toggle('mode-kr', effective==='kr');
+  document.body.classList.toggle('mode-us', effective==='us');
+
+  const badge = document.getElementById('phaseBadge');
+  badge.className = 'phase-badge ' + phase;
+  badge.textContent = phase==='kr' ? '국내 정규장' : '미국장';
+}
+
+document.querySelectorAll('.mode-toggle button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.mode-toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    manualMode = btn.dataset.mode;
+    applyMode();
+    // 모드를 수동으로 바꾸면 다음 주기적 갱신을 기다리지 않고 바로 해당 모드 데이터를 불러옵니다.
+    if(typeof refreshYahoo === 'function') refreshYahoo();
+    if(typeof refreshCore === 'function') refreshCore();
+    if(typeof refreshFearGreed === 'function') refreshFearGreed();
+  });
+});
+
+function tickClock(){
+  const now = getKST();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('clockKST').textContent =
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} KST`;
+}
+setInterval(tickClock, 1000);
+tickClock();
+setInterval(applyMode, 30000);
+applyMode();
+
+/* =========================================================
+   공통 fetch (직접 시도 → 실패 시 CORS 프록시로 재시도)
+========================================================= */
+async function fetchWithFallback(url, asText=false){
+  try{
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('bad status');
+    return asText ? await res.text() : await res.json();
+  }catch(e){
+    const proxied = CONFIG.CORS_PROXY + encodeURIComponent(url);
+    const res2 = await fetch(proxied, {cache:'no-store'});
+    if(!res2.ok) throw new Error('proxy failed');
+    return asText ? await res2.text() : await res2.json();
+  }
+}
+
+// 네이버 API는 숫자를 "3,264.66" 같은 콤마 포함 문자열로 주는 경우가 있어
+// Number()로 바로 변환하면 NaN이 됩니다. 콤마를 제거하고 숫자로 변환합니다.
+function toNum(v){
+  if(v===null || v===undefined) return NaN;
+  if(typeof v==='number') return v;
+  return parseFloat(String(v).replace(/,/g,''));
+}
+
+function fmtNum(n, digits=2){
+  if(n===null || n===undefined || isNaN(n)) return '-';
+  return Number(n).toLocaleString('ko-KR', {minimumFractionDigits:digits, maximumFractionDigits:digits});
+}
+
+// 히어로 가격(코스피/코스닥/다우/나스닥)용: 쉼표·마침표 주변 간격만 좁히고
+// 숫자와 숫자 사이 간격은 그대로 둡니다. innerHTML로 넣어야 적용됩니다.
+function fmtNumTight(n, digits=2){
+  const s = fmtNum(n, digits);
+  if(s==='-') return s;
+  return s.replace(/([,.])/g, '<span class="tight-punct">$1</span>');
+}
+
+function setDot(id, ok){
+  const el = document.getElementById(id);
+  if(el) el.classList.toggle('live', !!ok);
+}
+
+function setChangeEl(el, diff, pct, arrowOnly=false){
+  const dir = diff>0?'up':diff<0?'down':'flat';
+  const arrow = diff>0?'▲':diff<0?'▼':'-';
+  el.className = 'change mono ' + dir;
+  el.textContent = arrowOnly
+    ? `${arrow} ${fmtNum(Math.abs(diff))}`
+    : `${arrow} ${fmtNum(Math.abs(diff))}  (${fmtNum(Math.abs(pct))}%)`;
+}
+
+function nowStr(){
+  return getKST().toTimeString().slice(0,8) + ' 업데이트';
+}
+
+/* =========================================================
+   국내 지수 (KOSPI / KOSDAQ) — Naver 폴링 API
+========================================================= */
+// 코스피/코스닥 응답에 상승/하락 종목수 필드가 있으면 표시합니다.
+// ⚠️ 비공식 API라 정확한 필드명이 검증되지 않아 여러 후보를 시도합니다.
+//    값이 하나도 안 잡히면 "-"로 남습니다 — 브라우저 개발자도구(F12) 네트워크 탭에서
+//    이 API 응답(JSON)을 열어 실제 필드명을 확인한 뒤 아래 후보 배열에 추가해주시면 정확해집니다.
+function firstNum(obj, keys){
+  for(const k of keys){
+    const v = toNum(obj?.[k]);
+    if(!isNaN(v)) return v;
+  }
+  return null;
+}
+function renderHeroBreadth(elId, d){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  const rising = firstNum(d, ['risingStockCount','riseCount','upCount','advancingIssues','risingIssuesCount']);
+  const falling = firstNum(d, ['fallingStockCount','fallCount','downCount','decliningIssues','fallingIssuesCount']);
+  if(rising==null || falling==null){
+    el.textContent = '-';
+    return;
+  }
+  el.innerHTML = `<b class="up">▲ ${rising}</b><b class="down">▼ ${falling}</b>`;
+}
+
+async function loadDomesticIndex(){
+  try{
+    const url = 'https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI,KOSDAQ';
+    const data = await fetchWithFallback(url);
+    (data.datas || []).forEach(d=>{
+      const key = d.itemCode==='KOSPI' ? 'kospi' : d.itemCode==='KOSDAQ' ? 'kosdaq' : null;
+      if(!key) return;
+      const price = toNum(d.closePrice ?? d.now_val);
+      const diff = toNum(d.compareToPreviousClosePrice ?? 0);
+      const pct = toNum(d.fluctuationsRatio ?? 0);
+      document.getElementById(`${key}-price`).innerHTML = fmtNumTight(price);
+      setChangeEl(document.getElementById(`${key}-change`), diff, pct);
+      setDot(`dot-${key}`, true);
+      renderHeroBreadth(`${key}-breadth`, d);
+      if(key==='kospi'){
+        FG_STATE.kospiPct = pct;
+        updateKrFearGreed();
+      }
+    });
+  }catch(e){
+    console.warn('국내지수 로드 실패', e);
+  }
+}
+
+/* =========================================================
+   환율 — Naver 폴링 API
+========================================================= */
+async function loadFx(){
+  try{
+    const url = 'https://polling.finance.naver.com/api/realtime/domestic/exchange/FX_USDKRW';
+    const data = await fetchWithFallback(url);
+    const d = (data.datas||[])[0];
+    if(!d) return;
+    const price = toNum(d.closePrice ?? d.now_val ?? d.closePriceX);
+    const diff = toNum(d.compareToPreviousClosePrice ?? 0);
+    const pct = toNum(d.fluctuationsRatio ?? 0);
+    ['fx2'].forEach(k=>{
+      const priceEl = document.getElementById(`${k}-price`);
+      if(priceEl){
+        priceEl.textContent = fmtNum(price,1) + '원';
+        setChangeEl(document.getElementById(`${k}-change`), diff, pct);
+        setDot(`dot-${k}`, true);
+        const u = document.getElementById(`${k}-updated`);
+        if(u) u.textContent = nowStr();
+      }
+    });
+  }catch(e){
+    console.warn('환율 로드 실패', e);
+  }
+}
+
+/* =========================================================
+   주요 종목 (KOSPI/KOSDAQ 대표 종목) — Naver 폴링 API
+   종목 코드는 CONFIG.TOP_STOCKS 에서 자유롭게 교체 가능
+========================================================= */
+CONFIG.TOP_STOCKS = [
+  {code:'005930', name:'삼성전자', market:'KS'},
+  {code:'000660', name:'SK하이닉스', market:'KS'},
+  {code:'035420', name:'NAVER', market:'KS'},
+  {code:'035720', name:'카카오', market:'KS'},
+  {code:'373220', name:'LG에너지솔루션', market:'KS'},
+  {code:'005380', name:'현대차', market:'KS'},
+  {code:'247540', name:'에코프로비엠', market:'KQ'},   // 코스닥
+  {code:'196170', name:'알테오젠', market:'KQ'},       // 코스닥
+];
+
+// 미장(미국) 모드에서 "주요 종목"에 표시할 미국 대표 종목. 종목코드(Yahoo 심볼)는 자유롭게 교체 가능.
+CONFIG.TOP_STOCKS_US = [
+  {sym:'AAPL', name:'애플'},
+  {sym:'MSFT', name:'마이크로소프트'},
+  {sym:'NVDA', name:'엔비디아'},
+  {sym:'GOOGL', name:'알파벳'},
+  {sym:'AMZN', name:'아마존'},
+  {sym:'TSLA', name:'테슬라'},
+  {sym:'META', name:'메타'},
+  {sym:'AVGO', name:'브로드컴'},
+];
+
+// 국내 시총 상위 20개 종목(대략적 순위, 시가총액 변동에 따라 주기적으로 손볼 필요 있음).
+// "상승·하락 확률" 카드는 이 20개 전체 기준, 공포·탐욕 지수의 상승비율은 이 중 앞 10개만 사용합니다.
+CONFIG.BREADTH_STOCKS = [
+  {code:'005930'}, // 삼성전자
+  {code:'000660'}, // SK하이닉스
+  {code:'373220'}, // LG에너지솔루션
+  {code:'207940'}, // 삼성바이오로직스
+  {code:'005380'}, // 현대차
+  {code:'000270'}, // 기아
+  {code:'068270'}, // 셀트리온
+  {code:'005490'}, // POSCO홀딩스
+  {code:'035420'}, // NAVER
+  {code:'105560'}, // KB금융
+  {code:'055550'}, // 신한지주
+  {code:'006400'}, // 삼성SDI
+  {code:'051910'}, // LG화학
+  {code:'012330'}, // 현대모비스
+  {code:'035720'}, // 카카오
+  {code:'086790'}, // 하나금융지주
+  {code:'028260'}, // 삼성물산
+  {code:'329180'}, // HD현대중공업
+  {code:'012450'}, // 한화에어로스페이스
+  {code:'034020'}, // 두산에너빌리티
+];
+
+// Yahoo 차트 응답의 quote(close 배열)에서 결측치를 제외하고 최근 maxPoints개로 잘라줍니다.
+function extractCloses(quote, maxPoints=50){
+  if(!quote || !quote.close) return [];
+  return quote.close.filter(v=>v!=null).slice(-maxPoints);
+}
+
+// 5분봉 종가 배열을 토스 앱 느낌의 라인 차트(SVG)로 그립니다:
+// 부드러운 곡선 + 아래쪽 그라데이션 채움 + 전일종가 기준 점선 + 마지막 지점 글로우 점.
+// width/height는 100%로 채우고, 컨테이너(부모 div)가 숫자·등락률 영역과
+// 같은 높이로 flex-stretch 되어 있어 자동으로 그 크기에 맞춰집니다.
+//
+// opts.refValue: 기준선(점선)을 그릴 실제 전일종가. 넘기지 않으면 차트 첫 지점을 기준으로 씁니다.
+// opts.dir: 'up'|'down'|'flat'. 넘기지 않으면 차트 첫~끝 구간만 보고 자체 판단합니다.
+// ※ 화면에 표시되는 가격/등락률 배지와 같은 소스(전일종가 대비)를 넘겨줘야
+//   차트 색상·기준선이 배지와 항상 일치합니다. (장중 구간만 비교하면 배지와 어긋날 수 있음)
+let sparkGradientId = 0;
+function buildLineSVG(closes, w, h, opts={}){
+  const pad = 4;
+  let min = Math.min(...closes), max = Math.max(...closes);
+  if(opts.refValue!=null){
+    min = Math.min(min, opts.refValue);
+    max = Math.max(max, opts.refValue);
+  }
+  const range = (max-min) || 1;
+  const innerW = w - pad*2, innerH = h - pad*2;
+  const stepX = innerW / (closes.length-1);
+  const dir = opts.dir || (closes[closes.length-1] >= closes[0] ? 'up' : 'down');
+  const color = dir==='up' ? 'var(--up)' : dir==='down' ? 'var(--down)' : 'var(--flat)';
+  const gid = 'sparkGrad' + (sparkGradientId++);
+
+  const yFor = v => pad + (1-(v-min)/range)*innerH;
+  const pts = closes.map((v,i)=>({ x: pad + i*stepX, y: yFor(v) }));
+
+  // 중점 기반 스무딩으로 각진 폴리라인 대신 부드러운 곡선을 그립니다.
+  let path = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for(let i=1;i<pts.length;i++){
+    const p0 = pts[i-1], p1 = pts[i];
+    const mx = (p0.x+p1.x)/2, my = (p0.y+p1.y)/2;
+    path += ` Q ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)}`;
+  }
+  const last = pts[pts.length-1];
+  path += ` L ${last.x.toFixed(1)} ${last.y.toFixed(1)}`;
+
+  const baseY = pad + innerH;
+  const areaPath = `${path} L ${last.x.toFixed(1)} ${baseY.toFixed(1)} L ${pts[0].x.toFixed(1)} ${baseY.toFixed(1)} Z`;
+  const refY = (opts.refValue!=null ? yFor(opts.refValue) : pts[0].y).toFixed(1);
+
+  return `<svg width="100%" height="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <line x1="0" y1="${refY}" x2="${w}" y2="${refY}" stroke="var(--muted-2)" stroke-width="1" stroke-dasharray="2,3"/>
+    <path d="${areaPath}" fill="url(#${gid})" stroke="none"/>
+    <path d="${path}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="6" fill="${color}" opacity="0.25"/>
+    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="2.4" fill="${color}"/>
+  </svg>`;
+}
+
+// Yahoo Finance 차트 API에서 당일 5분봉 종가를 가져옵니다. (예: 005930.KS)
+async function fetchCloses(sym, maxPoints=50){
+  try{
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=5m&range=1d`;
+    const data = await fetchWithFallback(url);
+    const quote = data?.chart?.result?.[0]?.indicators?.quote?.[0];
+    return extractCloses(quote, maxPoints);
+  }catch(e){
+    return [];
+  }
+}
+
+async function loadTopStocks(){
+  try{
+    const codes = CONFIG.TOP_STOCKS.map(s=>s.code).join(',');
+    const url = `https://polling.finance.naver.com/api/realtime/domestic/stock/${codes}`;
+    const data = await fetchWithFallback(url);
+    const byCode = {};
+    (data.datas||[]).forEach(d=> byCode[d.itemCode] = d);
+
+    const strip = document.getElementById('stocksStrip');
+    strip.innerHTML = CONFIG.TOP_STOCKS.map(s=>{
+      const d = byCode[s.code];
+      if(!d) return `<div class="stock-chip"><div class="s-name">${s.name}</div><div class="s-price">-</div></div>`;
+      const price = toNum(d.closePrice);
+      const diff = toNum(d.compareToPreviousClosePrice ?? 0);
+      const pct = toNum(d.fluctuationsRatio ?? 0);
+      const dir = diff>0?'up':diff<0?'down':'flat';
+      const arrow = diff>0?'▲':diff<0?'▼':'-';
+      // 이 종목의 방향/전일종가를 저장해뒀다가, 별도로 갱신되는 스파크라인 차트가
+      // 이 가격배지와 같은 기준(전일종가 대비)으로 색·기준선을 맞추도록 합니다.
+      KR_STOCK_META[s.code] = { dir, prevClose: price - diff };
+      return `<div class="stock-chip">
+        <div class="s-name">${s.name}</div>
+        <div class="s-body">
+          <div>
+            <div class="s-price mono">${fmtNum(price,0)}</div>
+            <div class="s-chg mono ${dir}">${arrow} ${fmtNum(Math.abs(pct))}%</div>
+          </div>
+          <div class="s-spark" id="spark-${s.code}"></div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    console.warn('주요종목 로드 실패', e);
+  }
+}
+
+/* =========================================================
+   시총 상위 종목 등락 집계 — Naver 폴링 API
+   "상승·하락 확률" 카드는 CONFIG.BREADTH_STOCKS 20개 전체 기준,
+   공포·탐욕 지수의 상승비율은 이 중 앞 10개(더 큰 시총)만 따로 씁니다.
+========================================================= */
+async function loadKrBreadth(){
+  try{
+    const codes = CONFIG.BREADTH_STOCKS.map(s=>s.code).join(',');
+    const url = `https://polling.finance.naver.com/api/realtime/domestic/stock/${codes}`;
+    const data = await fetchWithFallback(url);
+    const byCode = {};
+    (data.datas||[]).forEach(d=> byCode[d.itemCode] = d);
+
+    const dirsAll = CONFIG.BREADTH_STOCKS.map(s=>{
+      const d = byCode[s.code];
+      if(!d) return 'flat';
+      const diff = toNum(d.compareToPreviousClosePrice ?? 0);
+      return diff>0 ? 'up' : diff<0 ? 'down' : 'flat';
+    });
+
+    // 20개 전체 → "상승·하락 확률" 카드
+    renderUpDown(dirsAll);
+
+    // 앞 10개(시총 상위) → 공포·탐욕 지수의 상승비율 입력값
+    const dirsTop10 = dirsAll.slice(0, 10);
+    const up10 = dirsTop10.filter(d=>d==='up').length;
+    const down10 = dirsTop10.filter(d=>d==='down').length;
+    const total10 = up10 + down10;
+    FG_STATE.upPct = total10>0 ? Math.round((up10/total10)*100) : 50;
+    updateKrFearGreed();
+  }catch(e){
+    console.warn('시총 상위 종목 등락 집계 실패', e);
+  }
+}
+
+// 종목별 당일 5분봉 라인차트는 프록시 부하가 커서 가격 갱신(빠른 주기)과 분리해
+// 느린 주기로 따로 돌립니다. 가격 표시가 끊기지 않도록 렌더는 막지 않습니다.
+// 국장 주요종목의 방향/전일종가 캐시 (loadTopStocks에서 채우고, loadTopStocksSparks에서 사용)
+const KR_STOCK_META = {};
+
+function loadTopStocksSparks(){
+  CONFIG.TOP_STOCKS.forEach(async s=>{
+    const closes = await fetchCloses(`${s.code}.${s.market}`, 50);
+    const el = document.getElementById(`spark-${s.code}`);
+    if(!el || closes.length<2) return;
+    const meta = KR_STOCK_META[s.code];
+    const opts = meta ? {refValue: meta.prevClose, dir: meta.dir} : {};
+    el.innerHTML = buildLineSVG(closes, 88, 42, opts);
+  });
+}
+
+/* =========================================================
+   주요 종목 (미국 대표 종목) — Yahoo Finance 차트 API
+   Naver 같은 국내용 배치 API가 없어 종목별로 개별 요청합니다.
+========================================================= */
+async function loadTopStocksUS(){
+  try{
+    const results = await Promise.all(CONFIG.TOP_STOCKS_US.map(async s=>{
+      try{
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${s.sym}?interval=5m&range=1d`;
+        const data = await fetchWithFallback(url);
+        const result = data?.chart?.result?.[0];
+        const meta = result?.meta;
+        if(!meta) return null;
+        const price = meta.regularMarketPrice;
+        const prevClose = meta.chartPreviousClose ?? meta.previousClose;
+        const diff = price - prevClose;
+        const pct = prevClose ? (diff/prevClose*100) : 0;
+        const closes = extractCloses(result?.indicators?.quote?.[0], 50);
+        return {price, diff, pct, prevClose, closes};
+      }catch(e){
+        return null;
+      }
+    }));
+
+    const strip = document.getElementById('stocksStripUS');
+    strip.innerHTML = CONFIG.TOP_STOCKS_US.map((s,i)=>{
+      const r = results[i];
+      if(!r) return `<div class="stock-chip"><div class="s-name">${s.name}</div><div class="s-price">-</div></div>`;
+      const dir = r.diff>0?'up':r.diff<0?'down':'flat';
+      const arrow = r.diff>0?'▲':r.diff<0?'▼':'-';
+      const sparkSvg = r.closes.length>=2 ? buildLineSVG(r.closes, 88, 42, {refValue:r.prevClose, dir}) : '';
+      return `<div class="stock-chip">
+        <div class="s-name">${s.name}</div>
+        <div class="s-body">
+          <div>
+            <div class="s-price mono">${fmtNum(r.price,2)}</div>
+            <div class="s-chg mono ${dir}">${arrow} ${fmtNum(Math.abs(r.pct))}%</div>
+          </div>
+          <div class="s-spark">${sparkSvg}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const dirs = CONFIG.TOP_STOCKS_US.map((s,i)=>{
+      const r = results[i];
+      if(!r) return 'flat';
+      return r.diff>0 ? 'up' : r.diff<0 ? 'down' : 'flat';
+    });
+    renderUpDown(dirs, {ids:{bar:'udBarUS', up:'udUpLabelUS', down:'udDownLabelUS', caption:'udCaptionUS'}});
+  }catch(e){
+    console.warn('미국 주요종목 로드 실패', e);
+  }
+}
+
+// 관심종목 중 상승/하락 종목 비율을 막대 형태로 보여줍니다.
+// ⚠️ 시장 전체 등락 종목 수(전체 시장 브레드스)가 아니라 화면에 표시된 관심종목 기준입니다.
+function renderUpDown(dirs, opts={}){
+  const ids = opts.ids || {bar:'udBar', up:'udUpLabel', down:'udDownLabel', caption:'udCaption'};
+  const up = dirs.filter(d=>d==='up').length;
+  const down = dirs.filter(d=>d==='down').length;
+  const flat = dirs.length - up - down;
+  const total = up + down;
+  let upPct = total>0 ? Math.round((up/total)*100) : 50;
+  // 한쪽으로 100% 쏠리는 극단값은 화면상 과장돼 보이니 5%p 보정합니다 (100/0 → 95/5).
+  if(upPct===100) upPct = 95;
+  if(upPct===0) upPct = 5;
+  const downPct = 100 - upPct;
+
+  document.getElementById(ids.bar).innerHTML =
+    `<div class="ud-up" style="width:${upPct}%"></div><div class="ud-down" style="width:${downPct}%"></div>`;
+  document.getElementById(ids.up).textContent = `상승 ${upPct}%`;
+  document.getElementById(ids.down).textContent = `하락 ${downPct}%`;
+  document.getElementById(ids.caption).textContent =
+    `관심종목 ${dirs.length}개 중 상승 ${up} · 하락 ${down} · 보합 ${flat} (${nowStr()})`;
+
+  if(opts.feedKrFearGreed){
+    FG_STATE.upPct = upPct;
+    updateKrFearGreed();
+  }
+}
+
+/* =========================================================
+   Yahoo Finance — 선물 / 미국지수 / 원자재 / 금리 / 코인
+========================================================= */
+const YAHOO_MAP = [
+  // 코스피/코스닥/환율은 실시간 가격 자체는 Naver에서 받아오고, 여기서는 차트(스파크라인)만 채웁니다.
+  {sym:'^KS11', spark:'spark-kospi', sparkOnly:true, krOnly:true},
+  {sym:'^KQ11', spark:'spark-kosdaq', sparkOnly:true, krOnly:true},
+  {sym:'KRW=X', spark:'spark-fx2', sparkOnly:true},
+
+  {sym:'YM=F', price:'ym-price', chg:'ym-change', dot:'dot-ym', upd:'ym-updated', card:true, spark:'spark-ym'},
+  {sym:'NQ=F', price:'nq-price', chg:'nq-change', dot:'dot-nq', upd:'nq-updated', card:true, spark:'spark-nq'},
+  {sym:'000001.SS', price:'china-price', chg:'china-change', dot:'dot-china', upd:'china-updated', card:true, spark:'spark-china', krOnly:true},
+  {sym:'^N225', price:'nikkei-price', chg:'nikkei-change', dot:'dot-nikkei', upd:'nikkei-updated', card:true, spark:'spark-nikkei', krOnly:true},
+  {sym:'^FTSE', price:'ftse-price', chg:'ftse-change', dot:'dot-ftse', upd:'ftse-updated', card:true, spark:'spark-ftse', usOnly:true},
+  {sym:'^GDAXI', price:'dax-price', chg:'dax-change', dot:'dot-dax', upd:'dax-updated', card:true, spark:'spark-dax', usOnly:true},
+  {sym:'^DJI', price:'dji-price', chg:'dji-change', dot:'dot-dji', hero:true, spark:'spark-dji', usIndexKey:'dow'},
+  {sym:'^IXIC', price:'ixic-price', chg:'ixic-change', dot:'dot-ixic', hero:true, spark:'spark-ixic', usIndexKey:'nasdaq'},
+  {sym:'^GSPC', sparkOnly:true, usOnly:true, usIndexKey:'sp'}, // 화면 카드 없이 "3대 지수 등락률" 차트 데이터로만 사용
+  {sym:'^SOX', price:'sox-price', chg:'sox-change', dot:'dot-sox', upd:'sox-updated', card:true, spark:'spark-sox'},
+  {sym:'^VIX', price:'vix-price', chg:'vix-change', dot:'dot-vix', upd:'vix-updated', card:true, spark:'spark-vix'},
+  {sym:'^RUT', price:'r2k-price', chg:'r2k-change', dot:'dot-r2k', upd:'r2k-updated', card:true, spark:'spark-r2k'},
+  {sym:'^TNX', ind:'ind-tnx', indChg:'ind-tnx-chg', spark:'spark-tnx'},
+  {sym:'CL=F', ind:'ind-wti', indChg:'ind-wti-chg', spark:'spark-wti'},
+  {sym:'GC=F', ind:'ind-gold', indChg:'ind-gold-chg', spark:'spark-gold'},
+  {sym:'DX-Y.NYB', ind:'ind-dxy', indChg:'ind-dxy-chg', spark:'spark-dxy'},
+  {sym:'BTC-USD', ind:'ind-btc', indChg:'ind-btc-chg', spark:'spark-btc'},
+  {sym:'JPY=X', ind:'ind-jpy', indChg:'ind-jpy-chg', spark:'spark-jpy'},
+];
+
+async function loadYahoo(item){
+  try{
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.sym)}?interval=5m&range=1d`;
+    const data = await fetchWithFallback(url);
+    const result = data?.chart?.result?.[0];
+    const meta = result?.meta;
+    if(!meta) throw new Error('no meta');
+    const price = meta.regularMarketPrice;
+    const prevClose = meta.chartPreviousClose ?? meta.previousClose;
+    const diff = price - prevClose;
+    const pct = prevClose ? (diff/prevClose*100) : 0;
+    const dir = diff>0?'up':diff<0?'down':'flat';
+
+    if(item.usIndexKey){
+      STATE_US[item.usIndexKey] = pct;
+      renderUsIndexChart();
+    }
+
+    if(item.price && !item.sparkOnly){
+      const priceEl = document.getElementById(item.price);
+      if(item.hero){
+        priceEl.innerHTML = fmtNumTight(price, 2);
+      }else{
+        priceEl.textContent = fmtNum(price, 2);
+      }
+      setChangeEl(document.getElementById(item.chg), diff, pct);
+      setDot(item.dot, true);
+      if(item.upd) document.getElementById(item.upd).textContent = nowStr();
+    }
+    if(item.ind && !item.sparkOnly){
+      document.getElementById(item.ind).textContent = fmtNum(price, 2);
+      const arrow = diff>0?'▲':diff<0?'▼':'-';
+      const el = document.getElementById(item.indChg);
+      el.className = 'chg mono ' + dir;
+      el.textContent = `${arrow} ${fmtNum(Math.abs(pct))}%`;
+    }
+    if(item.spark){
+      const ids = Array.isArray(item.spark) ? item.spark : [item.spark];
+      const quote = result?.indicators?.quote?.[0];
+      const maxPoints = item.hero ? 60 : item.ind ? 40 : 50;
+      const closes = extractCloses(quote, maxPoints);
+      if(closes.length>=2){
+        const [vw, vh] = item.hero ? [190,70] : item.ind ? [64,36] : [110,50];
+        // sparkOnly(코스피/코스닥/환율)는 실제 표시가격이 Naver 기준이라 차트 자체 흐름으로 판단하고,
+        // 그 외(다우/나스닥/선물/지표 등)는 화면 배지와 같은 소스(전일종가 대비)로 색·기준선을 맞춥니다.
+        const chartOpts = item.sparkOnly ? {} : {refValue: prevClose, dir};
+        const svg = buildLineSVG(closes, vw, vh, chartOpts);
+        ids.forEach(id=>{
+          const el = document.getElementById(id);
+          if(el) el.innerHTML = svg;
+        });
+      }
+    }
+  }catch(e){
+    console.warn('Yahoo 로드 실패:', item.sym, e);
+  }
+}
+
+function loadAllYahoo(){
+  // 국장 모드에서는 미국/유럽 전용 항목을, 미장 모드에서는 코스피/코스닥/중국/일본 전용 항목을 건너뜁니다.
+  const isUS = document.body.classList.contains('mode-us');
+  YAHOO_MAP.forEach(item=>{
+    if(isUS && item.krOnly) return;
+    if(!isUS && item.usOnly) return;
+    loadYahoo(item);
+  });
+}
+
+/* =========================================================
+   다우존스/나스닥 상승·하락 종목수 — Naver 해외지수 API (시도)
+   ⚠️ Yahoo Finance는 개별 종목/지수 시세만 주고 시장 전체 등락종목수는
+      제공하지 않습니다. 네이버가 해외지수 페이지(finance.naver.com/world/)에서
+      비슷한 정보를 보여주길래 같은 폴링 방식으로 시도해봅니다.
+      엔드포인트 주소·필드명 모두 미검증 추측이라 실패할 수 있고,
+      실패하면 조용히 "-"로 남습니다(에러로 방송이 끊기지 않도록).
+      브라우저 개발자도구(F12) 네트워크 탭에서 정확한 값을 확인해주시면
+      바로 맞는 값으로 고쳐드릴 수 있습니다.
+========================================================= */
+async function loadUsBreadth(){
+  const CANDIDATES = [
+    { url: 'https://polling.finance.naver.com/api/realtime/worldstock/index/.DJI,.IXIC',
+      match: c => c==='.DJI' ? 'dji' : c==='.IXIC' ? 'ixic' : null },
+    { url: 'https://polling.finance.naver.com/api/realtime/worldstock/index/DJI@DJI,NAS@IXIC',
+      match: c => c==='DJI@DJI' ? 'dji' : c==='NAS@IXIC' ? 'ixic' : null },
+  ];
+
+  for(const cand of CANDIDATES){
+    try{
+      const data = await fetchWithFallback(cand.url);
+      const list = data.datas || data.result?.areas?.[0]?.datas || [];
+      let found = false;
+      list.forEach(d=>{
+        const key = cand.match(d.itemCode ?? d.cd ?? d.code);
+        if(!key) return;
+        renderHeroBreadth(`${key}-breadth`, d);
+        found = true;
+      });
+      if(found) return; // 성공하면 다음 후보는 시도하지 않음
+    }catch(e){
+      // 이 후보 실패, 다음 후보로 넘어감
+    }
+  }
+  console.warn('다우/나스닥 상승·하락 종목수: 시도한 엔드포인트 모두 실패 (미검증 추측이라 예상된 상황)');
+}
+
+// 미국 3대 지수(다우/나스닥/S&P500) 당일 등락률 상태
+const STATE_US = { dow:0, nasdaq:0, sp:0 };
+function renderUsIndexChart(){
+  const el = document.getElementById('flowChartUS');
+  if(!el) return;
+  const items = [
+    {label:'다우', value: STATE_US.dow},
+    {label:'나스닥', value: STATE_US.nasdaq},
+    {label:'S&P500', value: STATE_US.sp},
+  ];
+  const fmt = v => (v>=0?'+':'') + v.toFixed(2) + '%';
+  el.innerHTML = buildFlowChartSVG(items, fmt);
+  const upd = document.getElementById('flowUS-updated');
+  if(upd) upd.textContent = nowStr();
+}
+
+/* =========================================================
+   수급 현황 바 차트 (이미지 참고: 기준선 위/아래로 뻗는 막대)
+========================================================= */
+function buildFlowChartSVG(items, formatFn){
+  const fmt = formatFn || (v => (v>=0?'+':'') + Math.round(v).toLocaleString('ko-KR') + '억');
+  const w=300, h=170, padTop=26, baselineY=h/2;
+  const maxAbs = Math.max(...items.map(it=>Math.abs(it.value)), 1);
+  const barW = 54;
+  const gap = (w - barW*items.length) / (items.length+1);
+  const maxBarH = (h/2) - padTop;
+
+  const bars = items.map((it,i)=>{
+    const x = gap + i*(barW+gap);
+    const barH = Math.max((Math.abs(it.value)/maxAbs) * maxBarH, 2);
+    const isUp = it.value >= 0;
+    const y = isUp ? baselineY - barH : baselineY;
+    const color = isUp ? 'var(--up)' : 'var(--down)';
+    const valueY = isUp ? y - 8 : y + barH + 18;
+    const labelY = isUp ? baselineY + 16 : baselineY - 8;
+    const valText = fmt(it.value);
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${barH.toFixed(1)}" rx="4" fill="${color}"/>
+      <text x="${(x+barW/2).toFixed(1)}" y="${valueY.toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="${color}">${valText}</text>
+      <text x="${(x+barW/2).toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text)">${it.label}</text>`;
+  }).join('');
+
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <line x1="0" y1="${baselineY}" x2="${w}" y2="${baselineY}" stroke="var(--line)" stroke-width="1.5"/>
+    ${bars}
+  </svg>`;
+}
+
+/* =========================================================
+   수급 현황 (외국인/기관/개인) — Naver 시장 투자자 매매동향 HTML 파싱
+   ※ 비공식 스크레이핑: 페이지 구조 변경 시 동작하지 않을 수 있어
+     실패하면 예시(DEMO) 값으로 대체 표시합니다.
+========================================================= */
+/* =========================================================
+   인기 검색 종목 — Naver 인기검색순위 페이지 HTML 파싱
+   ⚠️ 비공식 스크레이핑이라 페이지 구조가 예상과 다르면 실패할 수 있습니다.
+      실패하면 예시(DEMO) 데이터로 대체 표시합니다.
+========================================================= */
+const DEMO_POPULAR = [
+  {rank:1, name:'삼성전자', price:'274,500', chg:'+2.15%', dir:'up'},
+  {rank:2, name:'SK하이닉스', price:'1,645,000', chg:'+3.40%', dir:'up'},
+  {rank:3, name:'현대차', price:'453,000', chg:'+1.20%', dir:'up'},
+  {rank:4, name:'삼성전기', price:'1,558,000', chg:'+4.80%', dir:'up'},
+  {rank:5, name:'LG전자', price:'215,000', chg:'+0.94%', dir:'up'},
+];
+
+function renderPopularStocks(items, isDemo){
+  const list = document.getElementById('popularList');
+  list.innerHTML = items.map(it=>{
+    const arrow = it.dir==='up' ? '▲' : it.dir==='down' ? '▼' : '-';
+    return `<div class="popular-item">
+      <span class="popular-rank">${it.rank}</span>
+      <span class="popular-name">${it.name}</span>
+      <span class="popular-vals">
+        <span class="popular-price mono">${it.price}</span>
+        <span class="popular-chg mono ${it.dir}"><span class="popular-arrow">${arrow}</span>${it.chg || ''}</span>
+      </span>
+    </div>`;
+  }).join('');
+  const title = document.getElementById('popularTitle');
+  if(title) title.textContent = isDemo ? '🔥 인기 검색 종목 [예시 데이터]' : '🔥 인기 검색 종목';
+}
+
+async function loadPopularStocks(){
+  try{
+    const url = 'https://finance.naver.com/sise/lastsearch2.naver';
+    const html = await fetchWithFallback(url, true);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const rows = Array.from(doc.querySelectorAll('table tr'))
+      .filter(tr => tr.querySelector('a[href*="code="]'));
+
+    const items = rows.slice(0, 5).map((tr, i)=>{
+      const a = tr.querySelector('a[href*="code="]');
+      const name = a ? a.textContent.trim() : '-';
+      const tds = Array.from(tr.querySelectorAll('td'));
+      let price = '-', dir = 'flat', priceIdx = -1;
+
+      for(let j=0;j<tds.length;j++){
+        const digitsOnly = tds[j].textContent.replace(/[,\s]/g,'');
+        if(/^\d{3,}$/.test(digitsOnly)){
+          price = tds[j].textContent.trim();
+          priceIdx = j;
+          const cls = (tds[j].className||'') + ' ' + (tds[j].querySelector('[class]')?.className||'');
+          if(cls.includes('up')) dir = 'up';
+          else if(cls.includes('down')) dir = 'down';
+          break;
+        }
+      }
+
+      // 가격 칸 다음 몇 칸 안에서 "%"가 들어간 등락률 칸을 찾습니다.
+      let chg = '';
+      if(priceIdx>=0){
+        for(let j=priceIdx+1; j<Math.min(priceIdx+4, tds.length); j++){
+          const txt = tds[j].textContent.trim();
+          if(txt.includes('%')){
+            chg = txt.replace(/\s+/g,' ');
+            if(dir==='flat'){
+              const cls = (tds[j].className||'') + ' ' + (tds[j].querySelector('[class]')?.className||'');
+              if(cls.includes('up') || txt.includes('+')) dir = 'up';
+              else if(cls.includes('down') || txt.includes('-')) dir = 'down';
+            }
+            break;
+          }
+        }
+      }
+
+      return {rank:i+1, name, price, chg, dir};
+    }).filter(it=>it.price!=='-');
+
+    if(items.length===0) throw new Error('parse failed');
+    renderPopularStocks(items, false);
+  }catch(e){
+    console.warn('인기 검색 종목 로드 실패, 예시 데이터로 대체', e);
+    renderPopularStocks(DEMO_POPULAR, true);
+  }
+}
+
+/* =========================================================
+   업종별 시세 — Naver 업종별 시세 페이지 HTML 파싱
+   ⚠️ 비공식 스크레이핑이라 페이지 구조가 예상과 다르면 실패할 수 있습니다.
+      실패하면 예시(DEMO) 데이터로 대체 표시합니다.
+========================================================= */
+const DEMO_SECTORS = [
+  {name:'무선통신서비스', pct:8.49, dir:'up'},
+  {name:'자동차', pct:6.20, dir:'up'},
+  {name:'석유와가스', pct:5.84, dir:'up'},
+  {name:'자동차부품', pct:5.25, dir:'up'},
+  {name:'인터넷과카탈로그소매', pct:4.23, dir:'up'},
+  {name:'전자제품', pct:4.02, dir:'up'},
+];
+
+function renderSectors(items, isDemo){
+  const list = document.getElementById('sectorList');
+  const maxAbs = Math.max(...items.map(it=>Math.abs(it.pct)), 1);
+  list.innerHTML = items.map(it=>{
+    const barW = Math.max(Math.min(100, (Math.abs(it.pct)/maxAbs)*100), 4);
+    const color = it.dir==='up' ? 'var(--up)' : it.dir==='down' ? 'var(--down)' : 'var(--flat)';
+    const sign = it.pct>=0 ? '+' : '';
+    return `<div class="sector-item">
+      <span class="sector-name">${it.name}</span>
+      <span class="sector-chg ${it.dir}">${sign}${it.pct.toFixed(2)}%</span>
+      <span class="sector-bar-wrap"><span class="sector-bar" style="width:${barW}%; background:${color};"></span></span>
+    </div>`;
+  }).join('');
+  const title = document.getElementById('sectorTitle');
+  if(title) title.textContent = isDemo ? '업종별 시세 [예시 데이터]' : '업종별 시세';
+}
+
+async function loadSectorPerformance(){
+  try{
+    const url = 'https://finance.naver.com/sise/sise_group.naver?type=upjong';
+    const html = await fetchWithFallback(url, true);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const rows = Array.from(doc.querySelectorAll('table tr')).filter(tr=>tr.querySelector('a'));
+
+    const items = rows.map(tr=>{
+      const a = tr.querySelector('a');
+      const name = a ? a.textContent.trim() : '';
+      if(!name) return null;
+      const tds = Array.from(tr.querySelectorAll('td'));
+      let pct = null, dir = 'flat';
+      for(const td of tds){
+        const txt = td.textContent.trim();
+        if(txt.includes('%')){
+          const num = parseFloat(txt.replace(/[^0-9.\-]/g,''));
+          if(!isNaN(num)){
+            pct = num;
+            dir = txt.includes('-') ? 'down' : (num>0 ? 'up' : 'flat');
+          }
+          break;
+        }
+      }
+      if(pct===null) return null;
+      return {name, pct, dir};
+    }).filter(Boolean);
+
+    // 상승률 큰 순으로 정렬해서 상위 6개만 보여줍니다.
+    items.sort((a,b)=> b.pct - a.pct);
+    const top = items.slice(0, 6);
+    if(top.length===0) throw new Error('parse failed');
+    renderSectors(top, false);
+  }catch(e){
+    console.warn('업종별 시세 로드 실패, 예시 데이터로 대체', e);
+    renderSectors(DEMO_SECTORS, true);
+  }
+}
+
+async function loadInvestorFlow(){
+  function render(foreign, inst, ind, isDemo){
+    const items = [
+      {label:'개인', value:ind},
+      {label:'외국인', value:foreign},
+      {label:'기관', value:inst},
+    ];
+    document.getElementById('flowChart').innerHTML = buildFlowChartSVG(items);
+    document.getElementById('flow-updated').textContent = (isDemo?'[예시 데이터] ':'') + nowStr();
+
+    // 외국인+기관 순매수 방향을 -50~+50억 스케일로 정규화해 공포탐욕지수에 반영
+    FG_STATE.flowScore = clamp(50 + ((foreign+inst)/2000)*50, 0, 100);
+    updateKrFearGreed();
+  }
+
+  try{
+    const url = 'https://finance.naver.com/sise/investorDealTrendDay.naver';
+    const html = await fetchWithFallback(url, true);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const rows = doc.querySelectorAll('table.type_1 tr');
+    let firstDataRow = null;
+    rows.forEach(tr=>{
+      const tds = tr.querySelectorAll('td');
+      if(tds.length>=4 && !firstDataRow){
+        const nums = Array.from(tds).slice(1).map(td=>parseFloat(td.textContent.replace(/[^0-9.-]/g,'')));
+        if(nums.some(n=>!isNaN(n))) firstDataRow = nums;
+      }
+    });
+    if(firstDataRow && firstDataRow.length>=3){
+      const [ind, foreign, inst] = firstDataRow; // 개인, 외국인, 기관 순서(페이지 구조에 따라 다를 수 있음)
+      render(foreign, inst, ind, false);
+      return;
+    }
+    throw new Error('parse failed');
+  }catch(e){
+    console.warn('수급현황 로드 실패, 예시 데이터로 대체', e);
+    render(1240, -860, -380, true);
+  }
+}
+
+/* =========================================================
+   공포·탐욕 게이지 렌더러 (반원형 SVG, 값은 아래에서 국내 데이터로 산출)
+========================================================= */
+function polarToCartesian(cx, cy, r, angleDeg){
+  const rad = (angleDeg-90) * Math.PI/180;
+  return {x: cx + r*Math.cos(rad), y: cy + r*Math.sin(rad)};
+}
+function describeArc(cx, cy, r, startDeg, endDeg){
+  const start = polarToCartesian(cx, cy, r, endDeg);
+  const end = polarToCartesian(cx, cy, r, startDeg);
+  const largeArc = (endDeg-startDeg) <= 180 ? 0 : 1;
+  return `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} A ${r} ${r} 0 ${largeArc} 0 ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+}
+
+function buildFearGreedSVG(value){
+  const cx=110, cy=110, rOuter=95, rInner=72, w=220, h=130;
+  const zones = [
+    {from:0, to:25, color:'#E5484D'},
+    {from:25, to:45, color:'#F5A623'},
+    {from:45, to:55, color:'#9BA3B4'},
+    {from:55, to:75, color:'#7ED957'},
+    {from:75, to:100, color:'#2ECC71'},
+  ];
+  const valToDeg = v => -90 + (v/100)*180;
+  const arcs = zones.map(z=>{
+    const d = describeArc(cx, cy, (rOuter+rInner)/2, valToDeg(z.from), valToDeg(z.to));
+    return `<path d="${d}" fill="none" stroke="${z.color}" stroke-width="${rOuter-rInner}"/>`;
+  }).join('');
+  const angle = valToDeg(Math.max(0, Math.min(100, value)));
+  const tip = polarToCartesian(cx, cy, rInner-6, angle);
+
+  return `<svg width="${w}" height="${h+8}" viewBox="0 0 ${w} ${h+8}">
+    ${arcs}
+    <line x1="${cx}" y1="${cy}" x2="${tip.x.toFixed(1)}" y2="${tip.y.toFixed(1)}" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="var(--text)"/>
+  </svg>`;
+}
+
+/* =========================================================
+   공포·탐욕 지수 — 국내증시 자체 산출
+   CNN처럼 여러 세부지표를 쓰는 공식 지수 API가 국내엔 무료로 없어서,
+   이미 화면에 쓰는 국내 데이터 3가지(코스피 등락률·관심종목 상승비율·
+   외국인+기관 수급 방향)를 조합한 참고용 자체 지표입니다.
+========================================================= */
+const FG_STATE = { kospiPct: 0, upPct: 50, flowScore: 50 };
+
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+function fgRatingFromValue(v){
+  if(v<25) return '극도의 공포';
+  if(v<45) return '공포';
+  if(v<55) return '중립';
+  if(v<75) return '탐욕';
+  return '극도의 탐욕';
+}
+
+function updateKrFearGreed(){
+  const score1 = clamp(50 + FG_STATE.kospiPct*10, 0, 100); // 코스피 등락률(모멘텀) × 10
+  const score2 = clamp(FG_STATE.upPct, 0, 100);            // 시총 상위 10개 종목 상승비율
+  const score3 = clamp(FG_STATE.flowScore, 0, 100);        // 외국인+기관 수급 방향
+  const value = Math.round((score1 + score2 + score3) / 3);
+
+  document.getElementById('fgGauge').innerHTML = buildFearGreedSVG(value);
+  document.getElementById('fgValue').textContent = value;
+  document.getElementById('fgRating').textContent = fgRatingFromValue(value);
+}
+
+/* =========================================================
+   공포·탐욕 지수 (미장) — CNN Fear & Greed Index (미국증시 기준)
+   ※ 비공식 엔드포인트라 실패 시 예시(DEMO) 값으로 대체합니다.
+========================================================= */
+function translateFgRating(r){
+  const map = {
+    'extreme fear':'극도의 공포', 'fear':'공포', 'neutral':'중립',
+    'greed':'탐욕', 'extreme greed':'극도의 탐욕',
+  };
+  return map[String(r||'').toLowerCase()] || r || '-';
+}
+
+async function loadUsFearGreed(){
+  function render(value, rating, isDemo){
+    document.getElementById('fgGaugeUS').innerHTML = buildFearGreedSVG(value);
+    document.getElementById('fgValueUS').textContent = Math.round(value);
+    document.getElementById('fgRatingUS').textContent = (isDemo?'[예시] ':'') + rating;
+  }
+  try{
+    const url = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata';
+    const data = await fetchWithFallback(url);
+    const score = data?.fear_and_greed?.score;
+    const rating = data?.fear_and_greed?.rating;
+    if(score===undefined || score===null) throw new Error('no score');
+    render(score, translateFgRating(rating), false);
+  }catch(e){
+    console.warn('미국 공포·탐욕 지수 로드 실패, 예시 데이터로 대체', e);
+    render(50, '중립', true);
+  }
+}
+
+/* =========================================================
+   오늘의 경제지표 — ForexFactory 무료 주간 캘린더 JSON 미러
+   미국(USD) + 중요도 High/Medium만 걸러서, 오늘(KST 기준) 일정만 보여줍니다.
+   actual 값이 있으면 "이미 발표됨", 없으면 "발표 예정"으로 구분해서 표시합니다.
+========================================================= */
+function renderEconGroup(items, emptyText){
+  if(!items || items.length===0){
+    return `<div class="econ-empty" style="padding:10px 0;">${emptyText}</div>`;
+  }
+  return items.map(it=>{
+    const timeStr = it.date.toLocaleTimeString('ko-KR', {timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', hour12:false});
+    const star = it.impact==='High' ? ' ★' : '';
+    const released = it.actual && it.actual.trim()!=='';
+    const valsHtml = released
+      ? `발표 <b>${it.actual}</b>${it.forecast ? ` 예측 <b>${it.forecast}</b>` : ''}`
+      : (`${it.forecast ? `예측 <b>${it.forecast}</b>` : ''}${it.previous ? ` 이전 <b>${it.previous}</b>` : ''}` || '발표 대기중');
+    return `<div class="econ-item">
+      <div class="econ-title">🇺🇸 ${timeStr} ${it.title}${star}</div>
+      <div class="econ-vals">${valsHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderEconCalendar(released, upcoming){
+  const list = document.getElementById('econList');
+  if((!released || released.length===0) && (!upcoming || upcoming.length===0)){
+    list.innerHTML = '<div class="econ-empty">소식이 없어요</div>';
+    return;
+  }
+  list.innerHTML = `
+    <div class="econ-group-title">🌙 밤사이 발표된 지표</div>
+    ${renderEconGroup(released.slice(0,3), '발표된 지표 없음')}
+    <div class="econ-group-title">📅 오늘 밤 예정 지표</div>
+    ${renderEconGroup(upcoming.slice(0,3), '예정된 지표 없음')}
+  `;
+}
+
+function isSameKstDay(date, ref){
+  const opts = {timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit'};
+  return date.toLocaleDateString('en-CA', opts) === ref.toLocaleDateString('en-CA', opts);
+}
+
+async function loadEconCalendar(){
+  try{
+    let raw;
+    try{
+      raw = await fetchWithFallback(CONFIG.FF_CALENDAR.primary);
+    }catch(e){
+      console.warn('ForexFactory 기본 주소 실패, 백업 주소로 재시도', e);
+      raw = await fetchWithFallback(CONFIG.FF_CALENDAR.backup);
+    }
+
+    const arr = Array.isArray(raw) ? raw : (raw?.data || []);
+    const now = new Date();
+
+    const items = arr
+      .filter(it => it.country==='USD' && (it.impact==='High' || it.impact==='Medium'))
+      .map(it=>({
+        title: it.title || '',
+        impact: it.impact,
+        date: new Date(it.date),
+        forecast: it.forecast || '',
+        previous: it.previous || '',
+        actual: it.actual || '',
+      }))
+      .filter(it => it.title && !isNaN(it.date.getTime()) && isSameKstDay(it.date, now))
+      .sort((a,b)=> a.date - b.date);
+
+    // 실제값(actual)이 채워진 건 이미 발표된 것 = "밤사이 발표", 비어있으면 "오늘 밤 예정".
+    const released = items.filter(it => it.actual && it.actual.trim()!=='');
+    const upcoming = items.filter(it => !it.actual || it.actual.trim()==='');
+
+    renderEconCalendar(released, upcoming);
+  }catch(e){
+    console.warn('경제지표(ForexFactory) 로드 실패', e);
+    renderEconCalendar([], []);
+  }
+}
+
+/* =========================================================
+   뉴스 속보 — 세이브티커(SAVE, saveticker.com) API
+   ⚠️ 비공식 사용이라 응답 필드명이 검증되지 않았습니다. 흔히 쓰는 이름들을
+      여러 후보로 시도합니다. 응답 구조가 다르면 실패해서 에러 문구가 뜨는데,
+      그때 F12 개발자도구 → Network 탭에서 실제 응답(JSON)을 캡처해 주시면
+      정확한 필드명으로 바로 맞춰드릴 수 있습니다.
+========================================================= */
+const BADGE_COLORS = ['#FF6B6B','#4C8DFF','#3DD68C','#FFB020','#B47CFF','#4EC9E8'];
+function badgeColor(label){
+  let h=0; for(let i=0;i<label.length;i++) h = label.charCodeAt(i) + ((h<<5)-h);
+  return BADGE_COLORS[Math.abs(h) % BADGE_COLORS.length];
+}
+
+function relativeTime(dateStr){
+  const t = new Date(dateStr).getTime();
+  if(isNaN(t)) return '';
+  const diffMin = Math.max(0, Math.round((Date.now()-t)/60000));
+  if(diffMin < 1) return '방금 전';
+  if(diffMin < 60) return `${diffMin}분 전`;
+  const h = Math.round(diffMin/60);
+  if(h < 24) return `${h}시간 전`;
+  return `${Math.round(h/24)}일 전`;
+}
+
+// 응답이 배열로 바로 오거나 {data:[...]} / {items:[...]} 등으로 감싸져 올 수 있어 방어적으로 꺼냅니다.
+function extractNewsArray(data){
+  if(Array.isArray(data)) return data;
+  return data?.news_list ?? data?.data ?? data?.items ?? data?.list ?? data?.results ?? data?.news ?? [];
+}
+function extractNewsTitle(it){
+  return it.title ?? it.headline ?? it.subject ?? '';
+}
+function extractNewsTime(it){
+  return it.created_at ?? it.createdAt ?? it.published_at ?? it.publishedAt ?? it.date ?? it.time ?? null;
+}
+function extractNewsSource(it){
+  return it.source || 'SAVE';
+}
+
+async function loadNews(){
+  try{
+    const [topRaw, listRaw] = await Promise.all([
+      fetchWithFallback(CONFIG.SAVETICKER.topStoriesUrl).catch(()=>null),
+      fetchWithFallback(CONFIG.SAVETICKER.listUrl(10)).catch(()=>null),
+    ]);
+
+    const toItems = raw => extractNewsArray(raw)
+      .map(it=>({ title: extractNewsTitle(it), time: extractNewsTime(it), source: extractNewsSource(it) }))
+      .filter(it=>it.title);
+
+    const topItems = topRaw ? toItems(topRaw) : [];
+    const listItems = listRaw ? toItems(listRaw) : [];
+
+    if(topItems.length===0 && listItems.length===0) throw new Error('응답에서 뉴스 항목을 찾지 못함');
+
+    // 하단 속보 티커: 최신순 전체 목록 기준
+    const tickerSource = listItems.length>0 ? listItems : topItems;
+    const tickerHtml = tickerSource.slice(0, 14).map(it=>`<span><b>●</b>${it.title}</span>`).join('');
+    const track = document.getElementById('newsTicker');
+    track.innerHTML = tickerHtml + tickerHtml; // 무한 스크롤용 2배 복제
+
+    // 우측 실시간 이슈 사이드바: 주요뉴스 기준 (없으면 최신 목록으로 대체)
+    const sideSource = topItems.length>0 ? topItems : listItems;
+    const list = document.getElementById('issueList');
+    list.innerHTML = sideSource.slice(0, 10).map((it,i)=>{
+      const rel = relativeTime(it.time);
+      const isNew = rel==='방금 전' || (rel.endsWith('분 전') && parseInt(rel,10)<=10);
+      return `<div class="issue-item">
+        <div class="issue-rank mono">${i+1}</div>
+        <div class="issue-body">
+          <div class="issue-title">${it.title}</div>
+          <div class="issue-meta">
+            <span class="issue-badge" style="background:${badgeColor(it.source)}">${it.source[0]}</span>
+            <span>${it.source}</span>
+            <span>·</span>
+            <span>${rel}</span>
+            ${isNew ? '<span class="issue-new">NEW</span>' : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+  }catch(e){
+    console.warn('세이브티커 뉴스 로드 실패', e);
+    document.getElementById('newsTicker').innerHTML =
+      '<span>뉴스를 불러오지 못했습니다. 세이브티커 API 응답 구조를 확인해주세요.</span>';
+    document.getElementById('issueList').innerHTML =
+      '<div class="issue-item"><div class="issue-body"><div class="issue-title">뉴스를 불러오지 못했습니다.</div></div></div>';
+  }
+}
+
+/* =========================================================
+   초기 실행 & 주기적 갱신
+   — 데이터 성격별로 갱신 주기를 나눠서 프록시에 몰리는 요청을 분산합니다.
+========================================================= */
+function refreshCore(){
+  loadDomesticIndex();
+  loadFx();
+  if(!document.body.classList.contains('mode-us')){
+    loadTopStocks();
+    loadKrBreadth();
+  }
+}
+function refreshYahoo(){
+  loadAllYahoo();
+  if(document.body.classList.contains('mode-us')){
+    loadTopStocksUS();
+    loadUsBreadth();
+  }else{
+    loadTopStocksSparks();
+  }
+}
+function refreshFearGreed(){
+  if(document.body.classList.contains('mode-us')){
+    loadUsFearGreed();
+    loadEconCalendar();
+  }
+}
+
+refreshCore();
+refreshYahoo();
+loadInvestorFlow();
+loadPopularStocks();
+loadSectorPerformance();
+loadNews();
+updateKrFearGreed(); // 데이터 도착 전 중립(50)값으로 우선 표시
+refreshFearGreed();
+
+setInterval(refreshCore, CONFIG.REFRESH_CORE_MS);
+setInterval(refreshYahoo, CONFIG.REFRESH_YAHOO_MS);
+setInterval(loadInvestorFlow, CONFIG.REFRESH_FLOW_MS);
+setInterval(loadPopularStocks, CONFIG.REFRESH_FLOW_MS);
+setInterval(loadSectorPerformance, CONFIG.REFRESH_FLOW_MS);
+setInterval(loadNews, CONFIG.REFRESH_NEWS_MS);
+setInterval(refreshFearGreed, CONFIG.REFRESH_NEWS_MS);
+</script>
+</body>
+</html>
