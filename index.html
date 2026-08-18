@@ -748,10 +748,13 @@ const CONFIG = {
   // 데이터 성격별로 갱신 주기를 분리했습니다.
   // 핵심 국내 시세(코스피/코스닥/환율/주요종목 가격)는 빠르게,
   // 프록시 부하가 큰 야후 데이터·차트·스크레이핑은 느리게 돌려서 프록시 병목을 줄입니다.
-  REFRESH_CORE_MS: 8000,     // 코스피/코스닥/환율/주요종목 가격 (Naver)
-  REFRESH_YAHOO_MS: 25000,   // 미국지수/선물/원자재/지표 + 스파크라인 (Yahoo)
-  REFRESH_FLOW_MS: 30000,    // 수급현황 (HTML 스크레이핑, 가장 무거움)
-  REFRESH_NEWS_MS: 60000,    // 뉴스, 공포·탐욕 지수
+  REFRESH_CORE_MS: 8000,      // 코스피/코스닥/환율/주요종목 가격 (Naver)
+  REFRESH_YAHOO_MS: 25000,    // 미국지수/선물/원자재/지표 + 스파크라인 (Yahoo) — 15개 요청/회
+  REFRESH_HEAVY_MS: 120000,   // 국장/미장 주요종목 패널(차트 포함, 8~10개 요청/회) — 2분에 한 번
+  REFRESH_TICKER_MS: 300000,  // 속보 위 20종목 스크롤 티커 (20개 요청/회) — 5분에 한 번
+  REFRESH_FLOW_MS: 30000,     // 수급현황 (HTML 스크레이핑, 가장 무거움)
+  REFRESH_NEWS_MS: 60000,     // 뉴스, 공포·탐욕 지수
+  REFRESH_ECON_MS: 3600000,   // 경제지표(ForexFactory) — 1시간에 한 번만 (그 이상 요청하면 차단됨)
   // 세이브티커(SAVE, saveticker.com) API에서 뉴스를 가져옵니다.
   // topStoriesUrl: 우측 "실시간 이슈" 패널용 주요뉴스
   // listUrl(n): 하단 속보 티커용 최신순 전체 목록 (요청 개수의 4배, 최소 40)
@@ -809,6 +812,8 @@ document.querySelectorAll('.mode-toggle button').forEach(btn=>{
     // 모드를 수동으로 바꾸면 다음 주기적 갱신을 기다리지 않고 바로 해당 모드 데이터를 불러옵니다.
     if(typeof refreshYahoo === 'function') refreshYahoo();
     if(typeof refreshCore === 'function') refreshCore();
+    if(typeof refreshHeavy === 'function') refreshHeavy();
+    if(typeof refreshTicker === 'function') refreshTicker();
     if(typeof refreshFearGreed === 'function') refreshFearGreed();
   });
 });
@@ -1059,8 +1064,6 @@ CONFIG.TICKER_KOSPI = [
   {code:'000270', name:'기아'},
   {code:'068270', name:'셀트리온'},
   {code:'005490', name:'POSCO홀딩스'},
-  {code:'035420', name:'NAVER'},
-  {code:'105560', name:'KB금융'},
 ];
 CONFIG.TICKER_KOSDAQ = [
   {code:'247540', name:'에코프로비엠'},
@@ -1070,9 +1073,6 @@ CONFIG.TICKER_KOSDAQ = [
   {code:'058470', name:'리노공업'},
   {code:'328130', name:'루닛'},
   {code:'141080', name:'리가켐바이오'},
-  {code:'357780', name:'솔브레인'},
-  {code:'039030', name:'이오테크닉스'},
-  {code:'240810', name:'원익IPS'},
 ];
 CONFIG.TICKER_DOW = [
   {sym:'AAPL', name:'애플'},
@@ -1083,8 +1083,6 @@ CONFIG.TICKER_DOW = [
   {sym:'HD', name:'홈디포'},
   {sym:'GS', name:'골드만삭스'},
   {sym:'CAT', name:'캐터필러'},
-  {sym:'MCD', name:'맥도날드'},
-  {sym:'DIS', name:'디즈니'},
 ];
 CONFIG.TICKER_NASDAQ = [
   {sym:'NVDA', name:'엔비디아'},
@@ -1094,9 +1092,6 @@ CONFIG.TICKER_NASDAQ = [
   {sym:'TSLA', name:'테슬라'},
   {sym:'AVGO', name:'브로드컴'},
   {sym:'COST', name:'코스트코'},
-  {sym:'NFLX', name:'넷플릭스'},
-  {sym:'AMD', name:'AMD'},
-  {sym:'ADBE', name:'어도비'},
 ];
 
 // Yahoo 차트 응답의 quote(close 배열)에서 결측치를 제외하고 최근 maxPoints개로 잘라줍니다.
@@ -2168,45 +2163,79 @@ function refreshCore(){
   loadDomesticIndex();
   // loadFx(); // 네이버 환율 API(FX_USDKRW)가 404로 끊겨서 제거. 원/달러는 이제 Yahoo(KRW=X)에서 가져옵니다.
   if(!document.body.classList.contains('mode-us')){
-    loadTopStocks();
     loadKrBreadth();
-    loadStockTickerKR();
   }
 }
 function refreshYahoo(){
   loadAllYahoo();
+  if(!document.body.classList.contains('mode-us')){
+    loadKrMovingAverage();
+  }
+}
+// 종목 8~10개를 개별 조회하는 무거운 패널(차트 포함) — 2분에 한 번만
+function refreshHeavy(){
   if(document.body.classList.contains('mode-us')){
     loadTopStocksUS();
     loadUsBreadth();
+  }else{
+    loadTopStocks();
+    loadTopStocksSparks();
+  }
+}
+// 속보 위 20종목 스크롤 티커 — 요청이 제일 많아(20개) 5분에 한 번만
+function refreshTicker(){
+  if(document.body.classList.contains('mode-us')){
     loadStockTickerUS();
   }else{
-    loadTopStocksSparks();
-    loadKrMovingAverage();
+    loadStockTickerKR();
   }
 }
 function refreshFearGreed(){
   if(document.body.classList.contains('mode-us')){
     loadUsFearGreed();
+  }
+}
+function refreshEconCalendar(){
+  if(document.body.classList.contains('mode-us')){
     loadEconCalendar();
   }
 }
 
 refreshCore();
 refreshYahoo();
+refreshHeavy();
+refreshTicker();
 loadInvestorFlow();
 loadPopularStocks();
 loadSectorPerformance();
 loadNews();
 updateKrFearGreed(); // 데이터 도착 전 중립(50)값으로 우선 표시
 refreshFearGreed();
+refreshEconCalendar();
 
 setInterval(refreshCore, CONFIG.REFRESH_CORE_MS);
 setInterval(refreshYahoo, CONFIG.REFRESH_YAHOO_MS);
+setInterval(refreshHeavy, CONFIG.REFRESH_HEAVY_MS);
+setInterval(refreshTicker, CONFIG.REFRESH_TICKER_MS);
 setInterval(loadInvestorFlow, CONFIG.REFRESH_FLOW_MS);
 setInterval(loadPopularStocks, CONFIG.REFRESH_FLOW_MS);
 setInterval(loadSectorPerformance, CONFIG.REFRESH_FLOW_MS);
 setInterval(loadNews, CONFIG.REFRESH_NEWS_MS);
 setInterval(refreshFearGreed, CONFIG.REFRESH_NEWS_MS);
+setInterval(refreshEconCalendar, CONFIG.REFRESH_ECON_MS);
+</script>
+
+<!-- 우클릭·소스보기·개발자도구 단축키 억제 (완전한 차단은 아니며, 캐주얼한 접근을 막는 정도입니다) -->
+<script>
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('keydown', e => {
+  const k = e.key;
+  const isDevtools =
+    k === 'F12' ||
+    (e.ctrlKey && e.shiftKey && (k === 'I' || k === 'i' || k === 'J' || k === 'j' || k === 'C' || k === 'c')) ||
+    (e.ctrlKey && (k === 'U' || k === 'u' || k === 'S' || k === 's'));
+  if(isDevtools) e.preventDefault();
+});
 </script>
 </body>
 </html>
