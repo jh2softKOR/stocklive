@@ -815,6 +815,7 @@ document.querySelectorAll('.mode-toggle button').forEach(btn=>{
     if(typeof refreshHeavy === 'function') refreshHeavy();
     if(typeof refreshTicker === 'function') refreshTicker();
     if(typeof refreshFearGreed === 'function') refreshFearGreed();
+    if(typeof refreshKrScrape === 'function') refreshKrScrape();
   });
 });
 
@@ -2160,11 +2161,18 @@ async function loadNews(){
    — 데이터 성격별로 갱신 주기를 나눠서 프록시에 몰리는 요청을 분산합니다.
 ========================================================= */
 function refreshCore(){
-  loadDomesticIndex();
-  // loadFx(); // 네이버 환율 API(FX_USDKRW)가 404로 끊겨서 제거. 원/달러는 이제 Yahoo(KRW=X)에서 가져옵니다.
   if(!document.body.classList.contains('mode-us')){
+    loadDomesticIndex();
     loadKrBreadth();
   }
+  // loadFx(); // 네이버 환율 API(FX_USDKRW)가 404로 끊겨서 제거. 원/달러는 이제 Yahoo(KRW=X)에서 가져옵니다.
+}
+// 수급현황·인기검색종목·업종별시세 — 전부 국장(Naver) 전용 데이터라 미장 모드에선 건너뜁니다.
+function refreshKrScrape(){
+  if(document.body.classList.contains('mode-us')) return;
+  loadInvestorFlow();
+  loadPopularStocks();
+  loadSectorPerformance();
 }
 function refreshYahoo(){
   loadAllYahoo();
@@ -2205,9 +2213,7 @@ refreshCore();
 refreshYahoo();
 refreshHeavy();
 refreshTicker();
-loadInvestorFlow();
-loadPopularStocks();
-loadSectorPerformance();
+refreshKrScrape();
 loadNews();
 updateKrFearGreed(); // 데이터 도착 전 중립(50)값으로 우선 표시
 refreshFearGreed();
@@ -2217,9 +2223,7 @@ setInterval(refreshCore, CONFIG.REFRESH_CORE_MS);
 setInterval(refreshYahoo, CONFIG.REFRESH_YAHOO_MS);
 setInterval(refreshHeavy, CONFIG.REFRESH_HEAVY_MS);
 setInterval(refreshTicker, CONFIG.REFRESH_TICKER_MS);
-setInterval(loadInvestorFlow, CONFIG.REFRESH_FLOW_MS);
-setInterval(loadPopularStocks, CONFIG.REFRESH_FLOW_MS);
-setInterval(loadSectorPerformance, CONFIG.REFRESH_FLOW_MS);
+setInterval(refreshKrScrape, CONFIG.REFRESH_FLOW_MS);
 setInterval(loadNews, CONFIG.REFRESH_NEWS_MS);
 setInterval(refreshFearGreed, CONFIG.REFRESH_NEWS_MS);
 setInterval(refreshEconCalendar, CONFIG.REFRESH_ECON_MS);
