@@ -925,6 +925,9 @@ async function loadDomesticIndex(){
       setChangeEl(document.getElementById(`${key}-change`), diff, pct);
       setDot(`dot-${key}`, true);
       renderHeroBreadth(`${key}-breadth`, d);
+      // 실제 전일종가/방향을 저장해뒀다가, 별도 소스(Yahoo)로 그리는 차트가
+      // 이 값 기준(전일종가 대비)으로 색·기준선을 맞추도록 합니다.
+      KR_INDEX_META[key] = { dir: diff>0?'up':diff<0?'down':'flat', prevClose: price - diff };
       if(key==='kospi'){
         FG_STATE.kospiPct = pct;
         updateKrFearGreed();
@@ -1257,6 +1260,8 @@ async function loadKrBreadth(){
 // 느린 주기로 따로 돌립니다. 가격 표시가 끊기지 않도록 렌더는 막지 않습니다.
 // 국장 주요종목의 방향/전일종가 캐시 (loadTopStocks에서 채우고, loadTopStocksSparks에서 사용)
 const KR_STOCK_META = {};
+// 코스피/코스닥 실제 전일종가·방향 캐시 (loadDomesticIndex에서 채우고, 히어로 차트에서 사용)
+const KR_INDEX_META = {};
 
 function loadTopStocksSparks(){
   CONFIG.TOP_STOCKS.forEach(async s=>{
@@ -1386,8 +1391,8 @@ function renderUpDown(dirs, opts={}){
 ========================================================= */
 const YAHOO_MAP = [
   // 코스피/코스닥/환율은 실시간 가격 자체는 Naver에서 받아오고, 여기서는 차트(스파크라인)만 채웁니다.
-  {sym:'^KS11', spark:'spark-kospi', sparkOnly:true, krOnly:true},
-  {sym:'^KQ11', spark:'spark-kosdaq', sparkOnly:true, krOnly:true},
+  {sym:'^KS11', spark:'spark-kospi', sparkOnly:true, krOnly:true, krIndexKey:'kospi'},
+  {sym:'^KQ11', spark:'spark-kosdaq', sparkOnly:true, krOnly:true, krIndexKey:'kosdaq'},
   {sym:'KRW=X', price:'fx2-price', chg:'fx2-change', dot:'dot-fx2', upd:'fx2-updated',
    ind:'ind-krw', indChg:'ind-krw-chg', spark:['spark-fx2','spark-krw']},
   {sym:'JPY=X', ind:'ind-jpy', indChg:'ind-jpy-chg', spark:'spark-jpy', usOnly:true},
@@ -1454,9 +1459,15 @@ async function loadYahoo(item){
       const closes = extractCloses(quote, maxPoints);
       if(closes.length>=2){
         const [vw, vh] = item.hero ? [190,70] : item.ind ? [64,36] : [110,50];
-        // sparkOnly(코스피/코스닥/환율)는 실제 표시가격이 Naver 기준이라 차트 자체 흐름으로 판단하고,
-        // 그 외(다우/나스닥/선물/지표 등)는 화면 배지와 같은 소스(전일종가 대비)로 색·기준선을 맞춥니다.
-        const chartOpts = item.sparkOnly ? {} : {refValue: prevClose, dir};
+        // 코스피/코스닥은 네이버가 알려준 실제 전일종가·방향(KR_INDEX_META)을 그대로 쓰고,
+        // 환율(sparkOnly지만 krIndexKey 없음)은 기존처럼 차트 자체 흐름으로 판단합니다.
+        let chartOpts;
+        if(item.krIndexKey && KR_INDEX_META[item.krIndexKey]){
+          const meta = KR_INDEX_META[item.krIndexKey];
+          chartOpts = { refValue: meta.prevClose, dir: meta.dir };
+        }else{
+          chartOpts = item.sparkOnly ? {} : {refValue: prevClose, dir};
+        }
         const svg = buildLineSVG(closes, vw, vh, chartOpts);
         ids.forEach(id=>{
           const el = document.getElementById(id);
@@ -1733,7 +1744,7 @@ async function loadInvestorFlow(){
     document.getElementById('flow-updated').textContent = isDemo ? '⚠️ 예시 데이터 (실제 데이터 로드 실패)' : '';
 
     // 외국인 순매수만 -50~+50억 스케일로 정규화해 공포탐욕지수에 반영 (기관은 제외)
-    FG_STATE.foreignScore = clamp(50 + (foreign/2000)*50, 0, 100);
+    FG_STATE.foreignScore = clamp(50 + (foreign/8000)*50, 0, 100);
     updateKrFearGreed();
   }
 
@@ -1866,8 +1877,8 @@ async function loadKrMovingAverage(){
     const dev60 = (last - ma60) / ma60 * 100; // 60일선 대비 괴리율(%)
     const avgDev = (dev20 + dev60) / 2;
 
-    // 이동평균 대비 1% 위에 있으면 +8점 정도로 스케일 (경험적 값 — 필요시 조정)
-    FG_STATE.maScore = clamp(50 + avgDev*8, 0, 100);
+    // 이동평균 대비 1% 위에 있으면 +5점 정도로 스케일 (완만하게 반응하도록 낮춤 — 필요시 조정)
+    FG_STATE.maScore = clamp(50 + avgDev*5, 0, 100);
   }catch(e){
     console.warn('코스피 이동평균 계산 실패', e);
     FG_STATE.maScore = 50;
@@ -2181,13 +2192,13 @@ function refreshYahoo(){
   }
 }
 // 종목 8~10개를 개별 조회하는 무거운 패널(차트 포함) — 2분에 한 번만
+// ※ 국장 쪽 loadTopStocks/loadTopStocksSparks는 지금 화면 어디에도 안 쓰여서(예전 카드형
+//   "주요 종목"이 화면에서 빠지면서 소비처가 없어짐) 호출을 뺐습니다. 미장은 인기종목
+//   패널·상승하락확률 카드가 이 데이터를 계속 쓰고 있어서 유지합니다.
 function refreshHeavy(){
   if(document.body.classList.contains('mode-us')){
     loadTopStocksUS();
     loadUsBreadth();
-  }else{
-    loadTopStocks();
-    loadTopStocksSparks();
   }
 }
 // 속보 위 20종목 스크롤 티커 — 요청이 제일 많아(20개) 5분에 한 번만
