@@ -927,9 +927,12 @@ async function loadDomesticIndex(){
       renderHeroBreadth(`${key}-breadth`, d);
       // 실제 전일종가/방향을 저장해뒀다가, 별도 소스(Yahoo)로 그리는 차트가
       // 이 값 기준(전일종가 대비)으로 색·기준선을 맞추도록 합니다.
-      KR_INDEX_META[key] = { dir: diff>0?'up':diff<0?'down':'flat', prevClose: price - diff };
+      KR_INDEX_META[key] = { dir: diff>0?'up':diff<0?'down':'flat', prevClose: price - diff, price };
       if(key==='kospi'){
         FG_STATE.kospiPct = pct;
+        updateKrFearGreed();
+      }else if(key==='kosdaq'){
+        FG_STATE.kosdaqPct = pct;
         updateKrFearGreed();
       }
     });
@@ -1462,13 +1465,20 @@ async function loadYahoo(item){
         // 코스피/코스닥은 네이버가 알려준 실제 전일종가·방향(KR_INDEX_META)을 그대로 쓰고,
         // 환율(sparkOnly지만 krIndexKey 없음)은 기존처럼 차트 자체 흐름으로 판단합니다.
         let chartOpts;
+        let plotCloses = closes;
         if(item.krIndexKey && KR_INDEX_META[item.krIndexKey]){
           const meta = KR_INDEX_META[item.krIndexKey];
           chartOpts = { refValue: meta.prevClose, dir: meta.dir };
+          // 차트에 찍히는 마지막 점(현재 위치)을 Yahoo가 아니라 네이버의 실제 현재가로 고정합니다.
+          // Yahoo 데이터가 살짝 지연되면 "가격은 플러스인데 차트는 기준선 아래" 같은 불일치가 생겨서요.
+          if(meta.price!=null){
+            plotCloses = closes.slice();
+            plotCloses[plotCloses.length-1] = meta.price;
+          }
         }else{
           chartOpts = item.sparkOnly ? {} : {refValue: prevClose, dir};
         }
-        const svg = buildLineSVG(closes, vw, vh, chartOpts);
+        const svg = buildLineSVG(plotCloses, vw, vh, chartOpts);
         ids.forEach(id=>{
           const el = document.getElementById(id);
           if(el) el.innerHTML = svg;
@@ -1819,7 +1829,7 @@ function buildFearGreedSVG(value){
    이미 화면에 쓰는 국내 데이터 3가지(코스피 등락률·관심종목 상승비율·
    외국인+기관 수급 방향)를 조합한 참고용 자체 지표입니다.
 ========================================================= */
-const FG_STATE = { kospiPct: 0, upPct: 50, flowScore: 50 };
+const FG_STATE = { kospiPct: 0, kosdaqPct: 0, upPct: 50, flowScore: 50 };
 
 function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
 
@@ -1838,6 +1848,7 @@ FG_STATE.foreignScore = 50;
 
 function updateKrFearGreed(){
   const kospiPct = FG_STATE.kospiPct;
+  const kosdaqPct = FG_STATE.kosdaqPct;
 
   // 코스피 모멘텀 점수: +5%에서 100점, -5%에서 0점에 도달 (그 이상은 clamp)
   const momentumScore = clamp(50 + kospiPct*10, 0, 100);
@@ -1853,7 +1864,25 @@ function updateKrFearGreed(){
   const score2 = clamp(FG_STATE.foreignScore, 0, 100);  // 외국인 순매수 방향
   const otherScore = (score1 + score2) / 2;
 
-  const value = Math.round(momentumScore*momentumWeight + otherScore*otherWeight);
+  let value = Math.round(momentumScore*momentumWeight + otherScore*otherWeight);
+
+  // 코스피가 ±5% 이상이어도, 코스닥이 "같은 방향으로 ±5% 이상" 함께 움직이지 않으면
+  // 극도의 공포(0~24)/극도의 탐욕(75~100)까지는 안 가고 공포/탐욕 정도(25~74)로만 제한합니다.
+  // 코스피/코스닥이 아예 반대 방향이면, ±5% 문턱을 넘었는지와 상관없이
+  // 극도의 공포(0~24)/극도의 탐욕(75~100)까지는 못 가도록 항상 막습니다.
+  const sameDirection =
+    (kospiPct >= 0 && kosdaqPct >= 0) || (kospiPct <= 0 && kosdaqPct <= 0);
+  if(!sameDirection){
+    value = clamp(value, 25, 74);
+  }else{
+    const bothExtreme =
+      (kospiPct <= -5 && kosdaqPct <= -5) ||
+      (kospiPct >= 5 && kosdaqPct >= 5);
+    if(!bothExtreme){
+      if(kospiPct <= -5) value = Math.max(value, 25);
+      else if(kospiPct >= 5) value = Math.min(value, 74);
+    }
+  }
 
   document.getElementById('fgGauge').innerHTML = buildFearGreedSVG(value);
   document.getElementById('fgValue').textContent = value;
